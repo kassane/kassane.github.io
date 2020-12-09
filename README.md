@@ -3,7 +3,7 @@
 The code is managed in [a GitHub
 repository](https://github.com/jmanuel1/personal-website/). A
 [Buddy](https://buddy.works) pipeline is ran on every push to master that builds
-the site and uploads the resulting files to http://jason-manuel.com.
+the site and uploads the resulting files to http://kassane.github.io.
 
 The website was forked and personalized from
 [`github/personal-website`](https://github.com/github/personal-website).
