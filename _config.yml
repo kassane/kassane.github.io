@@ -30,20 +30,30 @@ projects:
     # - repo-name
 
 social_media:
-  stackoverflow: 6357722
-  telegram: mcatf
-  twitter: TheuCatarino
-  youtube: matheus_catarino
+  # behance: your_username
+  # dribbble: your_username
+  # facebook: your_username
+  # hackerrank: your_username
+  # instagram: your_username
+  # keybase: your_username
+  linkedin: jason-manuel
+  # mastodon: your_username
+  medium: JasonAManuel
+  # stackoverflow: your_user_id
+  # telegram: your_username
+  twitter: JasonAManuel
+  unsplash: photo_jam
+  # vk: your_username
+  # website: http://your_website_url
+  # youtube: your_username
 
 topics:
-  - name: C++ Programming Language
-    web_url: https://isocpp.org
-    image_url: https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/cpp/cpp.png
-  
-  - name: Rust Programming Language
-    web_url: https://rust-lang.org
-    image_url: https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/rust/rust.png
-   
-   - name: Zig Programming Language
-    web_url: https://ziglang.org
-    image_url: https://raw.githubusercontent.com/github/explore/b28ef5e65d2d582ab36c30e3e2068721e71625e4/topics/zig/zig.png
+  - name: Computational sustainability
+    web_url: https://www.computational-sustainability.org
+
+  - name: Front-end web development
+    web_url: https://github.com/topics/frontend
+
+  - name: Progressive Web Apps
+    web_url: https://github.com/topics/pwa
+    image_url: https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/pwa/pwa.png
