@@ -30,22 +30,13 @@ projects:
     # - repo-name
 
 social_media:
-  # behance: your_username
-  # dribbble: your_username
-  # facebook: your_username
-  # hackerrank: your_username
-  # instagram: your_username
-  # keybase: your_username
-  linkedin: jason-manuel
-  # mastodon: your_username
-  medium: JasonAManuel
-  # stackoverflow: your_user_id
-  # telegram: your_username
-  twitter: JasonAManuel
-  unsplash: photo_jam
+  stackoverflow: 6357722
+  telegram: mcatf
+  twitter: TheuCatarino
+  # unsplash: your_username
   # vk: your_username
   # website: http://your_website_url
-  # youtube: your_username
+  youtube: matheus_catarino
 
 topics:
   - name: Computational sustainability
