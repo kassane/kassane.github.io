@@ -1,4 +1,4 @@
-# Qt for Windows
+# Qt for Windows (pt-BR)
 
 ## Dicas ([Grupo Qt Brasil](https://t.me/qtbrasil))
 
@@ -64,7 +64,8 @@ Para mais informações sobre [MSYS2 for Qt WinDev](https://wiki.qt.io/MSYS2)
 
 **Método 1:** 
 - Abra o arquivo.pro e coloque:
-```qmake
+
+```
 isEmpty(TARGET_EXT) {
     win32 {
         TARGET_CUSTOM_EXT = .exe
@@ -88,6 +89,7 @@ CONFIG( debug, debug|release ) {
 # Use += ao invés do = se for usar multiplos QMAKE_POST_LINKs
 QMAKE_POST_LINK = $${DEPLOY_COMMAND} $${DEPLOY_TARGET}
 ```
+
 **Método 2:**
 - Abra o seu projeto no _QtCreator_ e aperte Ctrl+5 -> Run -> Add Step Deploy e escolha a opção Custom.
 ![cap1](https://user-images.githubusercontent.com/6756180/44786137-8d93f580-ab69-11e8-9a53-e3427d8f045b.PNG)
