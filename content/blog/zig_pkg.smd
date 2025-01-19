@@ -1,0 +1,151 @@
+---
+.title = "Zig-pkg (en-US)",
+.date = @date("2023-05-03T11:40:34"),
+.author = "Matheus Catarino",
+.draft = false,
+.layout = "article.shtml",
+.description = "Zig Package Manager v0.11.x",
+.tags = ["article", "zig", "zig-pkg", "package", "package-manager"]
+---
+
+## Next Zig version 🦎 - 0.11.x with Package Manager 🇺🇸
+
+Anyone who has been following the development progress of zig already knows that the new version will offer package management
+in addition to many other features.
+
+e.g.:
+
+- `std.http.Server` - HTTP/1.0 & HTTP/1.1;
+- `std.http.Client` - HTTP/1.0 & HTTP/1.1;
+- `std.crypto.tls` - 1.2 & 1.3;
+- [Build Parallel (`-j N`)][Build Parallel- by Andrew Kelley];
+
+For anyone not aware of that progress, please see the changelog below and this post.
+- [Unofficial Release-notes - by John Marler]
+- [Package Manager MVP - by Andrew Kelley]
+- [build-system terminology - by Andrew Kelley]
+- [ZON (Zig Object Notation) - by Andrew Kelley]
+
+### How to use `zig-pkg`
+
+* Download [Zig v0.11 or higher](https://ziglang.org/download)
+* Make on your project `build.zig` & `build.zig.zon` file
+
+e.g:
+
+* **build.zig**
+
+```zig
+    const mylib_dep = b.dependency("mylib", .{ // <== as declared in build.zig.zon
+        .target = target, // the same as passing `-Dtarget=<...>` to the library's build.zig script
+        .optimize = optimize, // ditto for `-Doptimize=<...>`
+    });
+    const mylib = mylib_dep.artifact("mylib"); // <== has the location of the dependency files (mylib)
+    
+   // your executable config
+    exe.linkLibrary(mylib); // <== link mylib
+    exe.addModule("mylib", mylib.module("mylib")); // <== for zig project
+    exe.installLibraryHeaders(mylib); // <== get copy mylib headers to zig-out/include (for C or C++ project)
+    
+// Glossary:
+// mylib_dep: std.Build.Dependency
+// (mylib_dep.artifact(...) == mylib): std.Build.Step.Compile (eql to addSharedLib/addStaticLib/addExecutable/addObject)
+// mylib.module(...): std.Build.Module
+```
+
+* **build.zig.zon**
+
+```zig
+.{
+    .name = "example",
+    .version = "0.1.0",
+    .dependencies = .{
+        .mylib = .{
+            .url = "https://github.com/username/mylib/archive/[tag/commit-hash].tar.gz",
+            .hash = "[multihash - sha256-2]",
+        },
+    },
+}
+// syntax: zig - nested anon struct
+```
+
+### Explained:
+
+However, to get the setting up above to work for all other userdev projects it is necessary to guarantee that the certain commands have been enabled on the library
+
+#### C/C++ Headers
+
+```zig
+ exe.installLibraryHeaders(mylib); // <== C/C++ projects
+ ```
+need on mylib `build.zig` add:
+```zig
+mylib.installHeader("foo.h", "foo.h"); // copy single-header file to zig-out/include (rename is optional)
+mylib.installHeadersDirectory("include", ""); // <== copy all headers (inc. subdir) to zig-out/include
+// or
+mylib.installHeadersDirectoryOptions(.{
+        .source_dir = "src",
+        .install_dir = .header,
+        .install_subdir = "",
+        .exclude_extensions = &.{
+            "am",
+            "gitignore",
+        },
+    });
+```
+It's usual that some unix-like projects contain headers mixed with source code and other files like makefiles.
+Therefore it is necessary to determine what will be copied or not! For some projects, preferable to replace `installHeadersDirectory()` by `installHeadersDirectoryOptions(.{})`.
+
+e.g.:
+
+C++ libraries fork with `zig-pkg`
+- [asio standalone](https://github.com/kassane/asio)
+- [outcome standalone](https://github.com/kassane/outcome)
+- [fmt](https://github.com/kassane/fmt)
+- [range-v3](https://github.com/kassane/range-v3)
+
+C libraries with `zig-pkg`
+- [winpthreads](https://github.com/kassane/winpthreads-zigbuild)
+- [libmingw32_extended](https://github.com/kassane/libmingw32_extended) - need `winpthreads` to build.
+
+
+#### Modules
+
+**Note:** No need `build.zig.zon` file to local modules!
+
+```zig
+exe.addModule("mylib", mylib.module("mylib")); // <== for zig project only
+```
+need on mylib `build.zig` add:
+```zig
+const mylib_module = b.createModule(.{
+        .source_file = .{
+            .path = "src/mylib.zig",
+        },
+        // optional
+        .dependencies = &.{
+        .{ .name = "foo", .module = foo.module(b) },
+        .{ .name = "bar", .module = bar.module(b) },
+        .{ .name = "baz", .module = baz.module(b) },
+    },
+    });
+
+// [...]    
+    mylib.addModule("mylib", mylib_module);
+```
+
+Hope you enjoyed this brief post!! 😄
+
+Keep in mind that the zig package manager is still under change, but is already used by some of the most known tools like:
+
+- [zls - zig language server](https://github.com/zigtools/zls)
+- [libxev - event-loop](https://github.com/mitchellh/libxev)
+- [Mach-Engine](https://github.com/hexops/mach)
+- [Capy-UI](https://github.com/capy-ui/capy)
+
+
+[Package Manager MVP - by Andrew Kelley]: https://github.com/ziglang/zig/pull/14265
+[build-system terminology - by Andrew Kelley]: https://github.com/ziglang/zig/issues/14307
+[ZON (Zig Object Notation) - by Andrew Kelley]: https://github.com/ziglang/zig/pull/14523
+[Unofficial Release-notes - by John Marler]: https://marler8997.github.io/zig-unofficial-releases/
+[Build Parallel- by Andrew Kelley]: https://github.com/ziglang/zig/pull/14647

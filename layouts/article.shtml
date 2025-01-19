@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title :text="$site.title"></title>
+  <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
+  <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
+</head>
+
+<body>
+  <div class="home_page">
+    <div class='static_grid'>
+      <div class='static_double_column1'>
+        <h3><span class="reset_a"><a href="/">🏠</a></span> <span class="reset_a"><a href="/about/">👤</a></span>
+        </h3>
+      </div>
+      <div class='static_double_column2'>
+        <h2 :text="$page.title"></h2>
+        <div class="article-meta">
+          <span>By <span :text="$page.author"></span></span>
+          <span>Published on <time :text="$page.date.format('January 02, 2006')"></time></span>
+        </div>
+      </div>
+      <div class='static_double_column3'>
+        <article class="content-border">
+          <div :html="$page.content()"></div>
+        </article>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,11 @@
+---
+.title = "About",
+.date = @date("2025-01-19T00:00:00"),
+.author = "Matheus Catarino",
+.draft = false,
+.layout = "about.shtml",
+.description = "About me",
+.tags = ["about", "info"]
+---
+
+I'm a software developer, I'm currently working with Zig, C/C++, Python, and other languages.

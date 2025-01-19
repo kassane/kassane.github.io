@@ -1,0 +1,13 @@
+---
+.title = "Home",
+.date = @date("2025-01-19T00:00:00"),
+.author = "Matheus Catarino",
+.draft = false,
+.layout = "index.shtml",
+.description = "Homepage",
+.tags = ["home", "index", "blog", "posts"]
+---
+
+## Recent Posts
+* 2019-07-07 - [Qt for Windows](/blog/qt_for_windows)
+* 2023-05-02 - [zig-pkg](/blog/zig_pkg)
