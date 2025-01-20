@@ -6,6 +6,7 @@
   <title :text="$site.title"></title>
   <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
   <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
+  <link rel="icon" href="$site.asset('favicon.ico').link()" type="image/x-icon">
 </head>
 
 <body>
