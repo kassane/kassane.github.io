@@ -8,4 +8,46 @@
 .tags = ["about", "info"]
 ---
 
-I'm a software developer, I'm currently working with Zig, C/C++, Python, and other languages.
+### Hi there 👋
+
+I'm Matheus Catarino, a Software Developer passionate about systems programming and performance optimization.
+
+#### 🔭 Areas of Interest
+- Systems Programming
+- Embedded Systems
+- Performance Optimization
+- Cross-platform Development
+
+#### 💻 Technical Skills
+- Languages: Zig, C/C++, Rust, Python
+- Tools: Git, CMake, Meson, Docker
+- Operating Systems: Linux, Windows, macOS
+- Embedded: ARM, RISC-V
+
+#### 🌱 Current Focus
+- Contributing to open-source projects
+- Developing high-performance applications
+- Learning about compiler design and optimization
+- Exploring modern systems programming languages
+
+#### 📫 Connect with Me
+- GitHub: [kassane](https://github.com/kassane)
+- Email: matheus-catarino@hotmail.com
+- LinkedIn: [Matheus Catarino](https://www.linkedin.com/in/matcf/)
+- Twitter: [@theucatarino](https://twitter.com/theucatarino)
+
+#### ⭐ Most Popular Projects
+- [qml-zig](https://github.com/kassane/qml_zig) - Zig bindings for Qt Quick
+- [zig-esp-idf-sample](https://github.com/kassane/zig-esp-idf-sample) - Zig samples for ESP-IDF
+- [llvm-zig](https://github.com/kassane/llvm-zig) - Zig bindings for LLVM
+- [libvlc-zig](https://github.com/kassane/libvlc-zig) - Zig bindings for libvlc
+- [openssl-zig](https://github.com/kassane/openssl-zig) - Build OpenSSL with Zig-build
+- [wolfssl-zig](https://github.com/kassane/wolfssl) - Build wolfSSL with Zig-build
+- [sokol-d](https://github.com/kassane/sokol-d) - D bindings from [sokol](https://github.com/floooh/sokol) headers
+
+
+#### 🎯 Goals
+- Advancing systems programming knowledge
+- Contributing to performance-critical applications
+- Sharing knowledge with the developer community
+- Exploring innovative solutions in low-level programming
