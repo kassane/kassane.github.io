@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title :text="$site.title"></title>
+  <meta name="description" content="Engineering blog by Matheus Catarino — systems programming, Zig, C/C++, embedded systems, and performance.">
+  <meta name="author" content="Matheus Catarino">
   <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
   <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
   <link rel="icon" href="$site.asset('favicon.ico').link()" type="image/x-icon">
@@ -14,8 +16,8 @@
   <div class="home_page">
     <div class="container">
       <header class="header">
-        <h1>Kassane Website</h1>
-        <nav class="main-nav">
+        <h1>Kassane</h1>
+        <nav class="main-nav" aria-label="Main navigation">
           <ul>
             <li><a href="/" class="nav-link">Home</a></li>
             <li><a href="/about/" class="nav-link">About</a></li>
