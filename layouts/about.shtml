@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
-  <title :text="$site.title"></title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title :text="$page.title"></title>
+  <meta name="description" content="Matheus Catarino — systems programmer focused on Zig, C/C++, embedded systems, and performance optimization.">
+  <meta name="author" content="Matheus Catarino">
   <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
   <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
   <link rel="icon" href="$site.asset('favicon.ico').link()" type="image/x-icon">
@@ -11,17 +14,27 @@
 
 <body>
   <div class="home_page">
-    <div class='static_grid'>
-      <div class='static_double_column1'>
-        <h3><a class="reset_a" href="/">🏠</a></h3>
-      </div>
-      <div class='static_double_column2'>
+    <div class="static_grid">
+
+      <nav class="static_double_column1" aria-label="Site navigation">
+        <h3>
+          <span class="reset_a"><a href="/">🏠 Home</a></span>
+        </h3>
+      </nav>
+
+      <header class="static_double_column2">
         <h2 :text="$page.title"></h2>
-      </div>
-      <div class='static_double_column3'>
-        <img src="https://avatars.githubusercontent.com/u/6756180?v=4" alt="">
+      </header>
+
+      <main class="static_double_column3">
+        <img class="avatar"
+             src="https://avatars.githubusercontent.com/u/6756180?v=4"
+             alt="Matheus Catarino"
+             width="120"
+             height="120">
         <div :html="$page.content()"></div>
-      </div>
+      </main>
+
     </div>
   </div>
 </body>

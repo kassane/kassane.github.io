@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
-  <title :text="$site.title"></title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title :text="$page.title"></title>
+  <meta name="description" content="Engineering blog by Matheus Catarino — systems programming, Zig, C/C++, embedded systems, and performance.">
+  <meta name="author" content="Matheus Catarino">
   <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
   <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
   <link rel="icon" href="$site.asset('favicon.ico').link()" type="image/x-icon">
@@ -11,23 +14,29 @@
 
 <body>
   <div class="home_page">
-    <div class='static_grid'>
-      <div class='static_double_column1'>
-        <h3><span class="reset_a"><a href="/">🏠</a></span> <span class="reset_a"><a href="/about/">👤</a></span>
+    <div class="static_grid">
+
+      <nav class="static_double_column1" aria-label="Site navigation">
+        <h3>
+          <span class="reset_a"><a href="/">🏠 Home</a></span>
+          <span class="reset_a"><a href="/about/">👤 About</a></span>
         </h3>
-      </div>
-      <div class='static_double_column2'>
+      </nav>
+
+      <header class="static_double_column2">
         <h2 :text="$page.title"></h2>
         <div class="article-meta">
           <span>By <span :text="$page.author"></span></span>
-          <span>Published on <time :text="$page.date.format('January 02, 2006')"></time></span>
+          <span>Published <time :text="$page.date.format('January 02, 2006')"></time></span>
         </div>
-      </div>
-      <div class='static_double_column3'>
+      </header>
+
+      <main class="static_double_column3">
         <article class="content-border">
           <div :html="$page.content()"></div>
         </article>
-      </div>
+      </main>
+
     </div>
   </div>
 </body>
