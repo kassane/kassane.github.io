@@ -1,0 +1,156 @@
+name: Update Zine
+
+# Automatically keeps the Zine static-site-generator dependency up to date.
+# When a new Zine release is detected the workflow:
+#   1. Runs `zig fetch --save` to refresh the URL + hash in build.zig.zon
+#   2. Writes zine.ziggy  (site config — Zine v0.11+ API)
+#   3. Simplifies build.zig to `zine.website(b, .{})`
+#   4. Aligns the Zig version in website.yml and minimum_zig_version with latest stable
+#   5. Opens a PR for review
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 1 * *'   # first day of each month, 08:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-zine:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── 1. Resolve the latest Zine release tag and its commit SHA ──────────
+      - name: Get latest Zine release
+        id: zine
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release view --repo kristoff-it/zine --json tagName -q .tagName)
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          # Dereference annotated tags to the underlying commit SHA
+          SHA=$(git ls-remote https://github.com/kristoff-it/zine.git \
+            "refs/tags/${TAG}^{}" | cut -f1)
+          # Fall back for lightweight tags
+          [ -z "$SHA" ] && SHA=$(git ls-remote https://github.com/kristoff-it/zine.git \
+            "refs/tags/${TAG}" | cut -f1)
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Latest Zine: ${TAG} (${SHA})"
+
+      # ── 2. Compare against what is currently pinned ────────────────────────
+      - name: Check if update is needed
+        id: check
+        run: |
+          CURRENT=$(sed -n 's|.*zine\.git#\([a-f0-9]*\)".*|\1|p' build.zig.zon | head -1)
+          echo "current=${CURRENT}" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "${{ steps.zine.outputs.sha }}" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Already on latest Zine (${CURRENT}). Nothing to do."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "Update needed: ${CURRENT} → ${{ steps.zine.outputs.sha }}"
+          fi
+
+      # ── 3. Install Zig (needed to run zig fetch --save) ───────────────────
+      - name: Setup Zig
+        if: steps.check.outputs.needed == 'true'
+        uses: mlugg/setup-zig@v1
+        with:
+          version: latest
+
+      # ── 4. Refresh URL + hash in build.zig.zon ────────────────────────────
+      - name: Update build.zig.zon hash via zig fetch
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          zig fetch --save \
+            "git+https://github.com/kristoff-it/zine.git#${{ steps.zine.outputs.tag }}"
+
+      # ── 5. Write zine.ziggy (site config — replaces build.zig args) ───────
+      - name: Write zine.ziggy
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          cat > zine.ziggy << 'EOF'
+          Site {
+              .title = "Kassane Website",
+              .host_url = "https://kassane.github.io",
+              .layouts_dir_path = "layouts",
+              .content_dir_path = "content",
+              .assets_dir_path = "assets",
+          }
+          EOF
+
+      # ── 6. Simplify build.zig (no more inline site config) ────────────────
+      - name: Update build.zig for new Zine API
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          cat > build.zig << 'EOF'
+          const std = @import("std");
+          const zine = @import("zine");
+
+          pub fn build(b: *std.Build) void {
+              zine.website(b, .{});
+          }
+          EOF
+
+      # ── 7. Align Zig version in CI and manifest ───────────────────────────
+      - name: Align Zig version in website.yml and build.zig.zon
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          ZIG=$(curl -sSf https://ziglang.org/download/index.json \
+            | jq -r '[to_entries[] | select(.key != "master")] | sort_by(.value.date) | last | .key')
+          echo "Latest stable Zig: ${ZIG}"
+
+          sed -i "s/version: [0-9][0-9.]*/version: ${ZIG}/" \
+            .github/workflows/website.yml
+
+          sed -i 's/\.minimum_zig_version = "[^"]*"/\.minimum_zig_version = "'"${ZIG}"'"/' \
+            build.zig.zon
+
+      # ── 8. Commit all changes and open a PR ───────────────────────────────
+      - name: Open PR with all changes
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZINE_BEFORE: ${{ steps.check.outputs.current }}
+          ZINE_AFTER: ${{ steps.zine.outputs.tag }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BRANCH="chore/zine-${ZINE_AFTER}"
+          git checkout -b "$BRANCH"
+          git add build.zig build.zig.zon zine.ziggy .github/workflows/website.yml
+          git diff --staged --quiet && { echo "Nothing to commit."; exit 0; }
+          git commit -m "chore: update Zine to ${ZINE_AFTER}"
+          git push origin "$BRANCH"
+
+          # Write PR body to a temp file to avoid quoting issues
+          cat > /tmp/pr-body.md << EOF
+          ## Automated Zine dependency update
+
+          | | Before | After |
+          |---|---|---|
+          | **Zine** | \`${ZINE_BEFORE}\` | \`${ZINE_AFTER}\` |
+
+          ### Files changed
+          - **\`build.zig.zon\`** — URL + hash refreshed via \`zig fetch --save\`
+          - **\`zine.ziggy\`** — site configuration (Zine v0.11+ moves config out of \`build.zig\`)
+          - **\`build.zig\`** — simplified to \`zine.website(b, .{})\`
+          - **\`.github/workflows/website.yml\`** — Zig version aligned with latest stable
+          - **\`build.zig.zon\`** — \`minimum_zig_version\` updated
+
+          ### Before merging
+          - [ ] Verify fields in \`zine.ziggy\` match your site settings
+          - [ ] Run \`zig build\` locally to confirm the site builds
+          EOF
+
+          gh pr create \
+            --title "chore: update Zine to ${ZINE_AFTER}" \
+            --body-file /tmp/pr-body.md \
+            --base main \
+            --head "$BRANCH"
