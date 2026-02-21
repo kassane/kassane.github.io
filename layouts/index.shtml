@@ -5,29 +5,69 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title :text="$site.title"></title>
-  <meta name="description" content="Engineering blog by Matheus Catarino — systems programming, Zig, C/C++, embedded systems, and performance.">
+  <meta name="description" content="Systems programming blog by Matheus Catarino (@kassane) — Zig, C/C++, Rust, embedded systems.">
   <meta name="author" content="Matheus Catarino">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Kassane Website">
+  <meta property="og:title" content="Kassane Website">
+  <meta property="og:description" content="Systems programming blog by Matheus Catarino (@kassane) — Zig, C/C++, Rust, embedded systems.">
+  <meta property="og:url" content="https://kassane.github.io/">
+  <meta property="og:image" content="https://avatars.githubusercontent.com/u/6756180?v=4">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@theucatarino">
+  <meta name="twitter:creator" content="@theucatarino">
+  <meta name="twitter:title" content="Kassane Website">
+  <meta name="twitter:description" content="Systems programming blog by Matheus Catarino — Zig, C/C++, Rust, embedded.">
+  <meta name="twitter:image" content="https://avatars.githubusercontent.com/u/6756180?v=4">
+
+  <!-- RSS Feed -->
+  <link rel="alternate" type="application/rss+xml" title="Kassane Website — RSS Feed" href="/feed.xml">
   <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
   <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
   <link rel="icon" href="$site.asset('favicon.ico').link()" type="image/x-icon">
 </head>
 
 <body>
+  <!-- Skip to main content for keyboard / screen-reader users -->
+  <a class="skip-link" href="#main">Skip to content</a>
+
   <div class="home_page">
     <div class="container">
-      <header class="header">
-        <h1>Kassane</h1>
-        <nav class="main-nav" aria-label="Main navigation">
-          <ul>
-            <li><a href="/" class="nav-link">Home</a></li>
+      <header class="header" role="banner">
+        <h1>Kassane Website</h1>
+        <nav class="main-nav" aria-label="Primary navigation">
+          <ul role="list">
+            <li><a href="/" class="nav-link" aria-current="page">Home</a></li>
             <li><a href="/about/" class="nav-link">About</a></li>
+            <li>
+              <a href="/feed.xml" class="nav-link nav-rss" aria-label="RSS feed">
+                <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z"/>
+                </svg>
+                RSS
+              </a>
+            </li>
           </ul>
         </nav>
       </header>
 
-      <main class="main-content">
-        <div id="main" :html="$page.content()"></div>
+      <main class="main-content" id="main">
+        <div :html="$page.content()"></div>
       </main>
+
+      <footer class="site-footer" role="contentinfo">
+        <p>
+          &copy; 2019&ndash;2026 Matheus Catarino &middot;
+          <a href="https://github.com/kassane" rel="noopener noreferrer" target="_blank">GitHub</a> &middot;
+          <a href="https://www.linkedin.com/in/matcf/" rel="noopener noreferrer" target="_blank">LinkedIn</a> &middot;
+          <a href="/feed.xml">RSS</a>
+        </p>
+        <p class="footer-tech">Built with <a href="https://ziglang.org" rel="noopener noreferrer" target="_blank">Zig</a> &amp; <a href="https://zine-ssg.io" rel="noopener noreferrer" target="_blank">Zine</a></p>
+      </footer>
     </div>
   </div>
 </body>

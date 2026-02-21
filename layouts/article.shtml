@@ -4,38 +4,123 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Page-specific title; Zine evaluates $page.* expressions in attribute values -->
   <title :text="$page.title"></title>
-  <meta name="description" content="Engineering blog by Matheus Catarino — systems programming, Zig, C/C++, embedded systems, and performance.">
-  <meta name="author" content="Matheus Catarino">
+  <meta name="description" content="$page.description">
+  <meta name="author" content="$page.author">
+
+  <!-- Open Graph — article -->
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Kassane Website">
+  <meta property="og:title" content="$page.title">
+  <meta property="og:description" content="$page.description">
+  <meta property="og:url" content="$page.link()">
+  <meta property="og:image" content="https://avatars.githubusercontent.com/u/6756180?v=4">
+  <meta property="article:author" content="Matheus Catarino">
+  <meta property="article:published_time" content="$page.date.format('2006-01-02T15:04:05Z')">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:site" content="@theucatarino">
+  <meta name="twitter:creator" content="@theucatarino">
+  <meta name="twitter:title" content="$page.title">
+  <meta name="twitter:description" content="$page.description">
+  <meta name="twitter:image" content="https://avatars.githubusercontent.com/u/6756180?v=4">
+
+  <!-- RSS Feed -->
+  <link rel="alternate" type="application/rss+xml" title="Kassane Website — RSS Feed" href="/feed.xml">
   <link rel="stylesheet" type="text/css" href="$site.asset('normalize.css').link()">
   <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
   <link rel="icon" href="$site.asset('favicon.ico').link()" type="image/x-icon">
 </head>
 
 <body>
+  <!-- Skip to main content for keyboard / screen-reader users -->
+  <a class="skip-link" href="#main">Skip to content</a>
+
   <div class="home_page">
     <div class="static_grid">
 
-      <nav class="static_double_column1" aria-label="Site navigation">
-        <h3>
-          <span class="reset_a"><a href="/">🏠 Home</a></span>
-          <span class="reset_a"><a href="/about/">👤 About</a></span>
-        </h3>
-      </nav>
+      <!-- Navigation column -->
+      <div class="static_double_column1">
+        <nav aria-label="Primary navigation">
+          <ul role="list" class="side-nav">
+            <li><a href="/">🏠 Home</a></li>
+            <li><a href="/about/">👤 About</a></li>
+            <li>
+              <a href="/feed.xml" aria-label="RSS Feed">
+                <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle">
+                  <path d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19.01 7.38 20 6.18 20C4.98 20 4 19.01 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1z"/>
+                </svg>
+                RSS
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
 
-      <header class="static_double_column2">
-        <h2 :text="$page.title"></h2>
+      <!-- Title / metadata column -->
+      <div class="static_double_column2">
+        <h1 :text="$page.title"></h1>
         <div class="article-meta">
           <span>By <span :text="$page.author"></span></span>
-          <span>Published <time :text="$page.date.format('January 02, 2006')"></time></span>
+          <span>
+            Published on
+            <time :text="$page.date.format('January 02, 2006')"></time>
+          </span>
         </div>
-      </header>
+      </div>
 
-      <main class="static_double_column3">
-        <article class="content-border">
-          <div :html="$page.content()"></div>
-        </article>
-      </main>
+      <!-- Article body column -->
+      <div class="static_double_column3">
+        <main id="main">
+          <article aria-labelledby="article-title">
+            <!-- Visually hidden heading for assistive tech (title already shown in column2) -->
+            <h2 id="article-title" class="visually-hidden" :text="$page.title"></h2>
+            <div :html="$page.content()"></div>
+          </article>
+
+          <!-- ── Giscus comments ────────────────────────────────────────────
+               Setup: https://giscus.app
+               1. Enable GitHub Discussions on kassane/kassane.github.io
+               2. Install the Giscus GitHub App on the repository
+               3. Visit https://giscus.app, configure the repo, and copy
+                  data-repo-id and data-category-id into the script below.
+          ──────────────────────────────────────────────────────────────── -->
+          <section class="comments-section" aria-label="Comments">
+            <h2>Comments</h2>
+            <script src="https://giscus.app/client.js"
+                    data-repo="kassane/kassane.github.io"
+                    data-repo-id="REPLACE_WITH_REPO_ID"
+                    data-category="Announcements"
+                    data-category-id="REPLACE_WITH_CATEGORY_ID"
+                    data-mapping="pathname"
+                    data-strict="0"
+                    data-reactions-enabled="1"
+                    data-emit-metadata="0"
+                    data-input-position="bottom"
+                    data-theme="preferred_color_scheme"
+                    data-lang="en"
+                    data-loading="lazy"
+                    crossorigin="anonymous"
+                    async>
+            </script>
+            <noscript>
+              <p>Enable JavaScript to load comments via <a href="https://giscus.app" rel="noopener noreferrer" target="_blank">Giscus</a> (backed by GitHub Discussions).</p>
+            </noscript>
+          </section>
+        </main>
+
+        <footer class="site-footer" role="contentinfo">
+          <p>
+            &copy; 2019&ndash;2026 Matheus Catarino &middot;
+            <a href="https://github.com/kassane" rel="noopener noreferrer" target="_blank">GitHub</a> &middot;
+            <a href="https://www.linkedin.com/in/matcf/" rel="noopener noreferrer" target="_blank">LinkedIn</a> &middot;
+            <a href="/feed.xml">RSS</a>
+          </p>
+          <p class="footer-tech">Built with <a href="https://ziglang.org" rel="noopener noreferrer" target="_blank">Zig</a> &amp; <a href="https://zine-ssg.io" rel="noopener noreferrer" target="_blank">Zine</a></p>
+        </footer>
+      </div>
 
     </div>
   </div>

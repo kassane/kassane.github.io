@@ -75,6 +75,37 @@
     --border-radius:     4px;
 }
 
+/* ── Skip-to-content link (accessibility) ─────────────────────────── */
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 9999;
+    padding: 0.5rem 1rem;
+    background: var(--srcery-blue);
+    color: var(--srcery-white-bright);
+    border-radius: 0 0 4px 4px;
+    font-weight: bold;
+    text-decoration: none;
+    transition: top 0.2s;
+}
+.skip-link:focus {
+    top: 0;
+}
+
+/* ── Visually hidden (screen-reader only) ──────────────────────────── */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 /* --- Base ------------------------------------------------- */
 
 *,
@@ -532,3 +563,80 @@ code .type-definition  { color: var(--srcery-magenta)        }
 code .type-qualifier   { color: var(--srcery-blue-bright)    }
 code .variable         { color: var(--srcery-cyan)           }
 code .variable-builtin { color: var(--srcery-magenta-bright) }
+
+/* ── Focus visibility (WCAG 2.1 §1.4.11) ──────────────────────────── */
+:focus-visible {
+    outline: 3px solid var(--color-link);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Visited link colour */
+a:visited {
+    color: var(--srcery-magenta);
+}
+
+/* ── RSS nav link ───────────────────────────────────────────────────── */
+.nav-rss {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--srcery-orange) !important;
+}
+
+/* ── Side navigation (article / about columns) ─────────────────────── */
+.side-nav {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.side-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    text-decoration: none;
+    color: var(--color-text);
+    font-weight: 600;
+    padding: 0.2rem 0.3rem;
+    border-radius: var(--border-radius);
+    transition: background 0.15s;
+}
+.side-nav a:hover {
+    background: var(--srcery-xgray3);
+    color: var(--srcery-white-bright);
+}
+
+/* ── Comments section ───────────────────────────────────────────────── */
+.comments-section {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+}
+.comments-section h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+.comments-section noscript p {
+    color: var(--color-muted);
+    font-style: italic;
+}
+
+/* ── Site footer ────────────────────────────────────────────────────── */
+.site-footer {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--color-border);
+    font-size: var(--font-size-sm);
+    color: var(--color-muted);
+    text-align: center;
+}
+.site-footer a {
+    color: var(--color-muted);
+}
+.footer-tech {
+    margin-top: var(--space-xs);
+    font-size: 0.8rem;
+}
