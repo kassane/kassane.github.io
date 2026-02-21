@@ -1,0 +1,162 @@
+---
+.title = "Vibe Coding with Claude (en-US)",
+.date = @date("2026-02-21T00:00:00"),
+.author = "Matheus Catarino",
+.draft = false,
+.layout = "article.shtml",
+.description = "My experiences coding in a vibe style using Claude Code as a pair-programmer for systems-level work",
+.tags = ["article", "claude", "ai", "vibe-coding", "zig", "ci-cd", "en-US"]
+---
+
+## What is Vibe Coding?
+
+The term *vibe coding* was coined by Andrej Karpathy and describes a way of programming
+where you lean into an AI assistant — describing intent, reviewing output, and
+iterating — rather than manually typing every line yourself.
+The name sounds deliberately casual, but the underlying idea is serious:
+treat the AI as a capable junior (or sometimes senior) colleague that you direct
+at a high level while staying responsible for correctness and design decisions.
+
+I've been a systems programmer for years. My daily tools are Zig, C, and Rust.
+The idea of delegating coding to an AI felt distant from my world — low-level code
+demands precision that LLMs have historically struggled with.
+But over the past few weeks I started using **Claude Code** (Anthropic's CLI) as a
+pair-programmer on my personal blog and tooling, and my opinion shifted.
+
+---
+
+## The Test Drive: My Zine-based Blog
+
+My blog runs on [Zine](https://zine-ssg.io/), a static site generator written in
+Zig. It's a niche tool even inside the Zig ecosystem, and its API has been moving fast.
+
+The first real task I gave Claude was: *investigate what changed between my pinned Zine
+commit and v0.11.2, figure out the migration path, and handle it.*
+
+A straightforward request for me; a surprisingly involved research task for a tool.
+Claude had to:
+
+1. Read `build.zig.zon` to find the current pinned commit hash
+2. Fetch Zine's changelog, release notes, and source code across multiple files
+3. Determine that Zine v0.11+ moved site configuration out of `build.zig` arguments
+   into a new `zine.ziggy` file using a tagged-union Ziggy format
+4. Figure out the exact field names (`layouts_dir_path`, `content_dir_path`, …)
+   by reading Zine's `src/root.zig`
+5. Produce the correct `zine.ziggy` syntax — Ziggy tagged unions look like
+   `Site { .field = value, … }` — without having a direct working example to copy from
+
+It got through all of that in a single session, mostly correctly.
+The one uncertainty was the Ziggy tagged-union syntax; Claude flagged it explicitly
+and explained that the build would produce a clear error if the format was wrong.
+That kind of honest uncertainty is more useful than a confident wrong answer.
+
+---
+
+## The Workflow That Emerged
+
+The session quickly became conversational.
+I'd describe a goal, Claude would explore the codebase, fetch relevant docs, and
+propose a change; I'd review and either approve or course-correct.
+A few things I noticed:
+
+### It explores faster than I do
+
+Grepping through an unfamiliar dependency's source to find a struct definition is
+tedious. Claude parallelises those searches and synthesises the results.
+Tracking down where Zine's new `Config` union was defined — and understanding that
+`zine.ziggy` is parsed at runtime by the Zine binary, not at build time — took Claude
+a handful of web fetches. It would have taken me a coffee-fuelled half-hour.
+
+### It's good at boilerplate automation
+
+After the migration work, I asked for a GitHub Actions workflow that:
+- Detects the latest Zine release via the GitHub API
+- Resolves the release tag to a commit SHA using `git ls-remote`
+  (correctly handling both lightweight and annotated tags)
+- Compares it against the pinned SHA in `build.zig.zon`
+- Runs `zig fetch --save` to compute and write the new hash automatically
+- Writes `zine.ziggy` and simplifies `build.zig`
+- Updates the Zig version across CI and `minimum_zig_version`
+- Opens a PR for review
+
+That's a lot of orchestration. Claude wrote it cleanly and in one pass.
+The subtleties — like using a heredoc-safe approach in GitHub Actions YAML,
+avoiding Perl-regex grep on non-GNU systems, and setting `GITHUB_OUTPUT` correctly —
+were all handled without prompting.
+
+### It requires you to stay engaged
+
+Vibe coding is not fire-and-forget. I reviewed every diff.
+There were moments where Claude suggested a Zig version bump that could have broken
+the existing build if applied in isolation. The right answer was to update the
+dependency *and* the CI version *together*, which required redirecting the plan.
+
+The AI doesn't carry product context. It doesn't know that my blog is low-traffic,
+that I prefer minimal dependencies, or that I'd rather get a failing build error than
+a silent misconfiguration. You have to supply that context through your questions
+and corrections.
+
+---
+
+## What Surprised Me
+
+**The depth of tool use.** Claude Code isn't just text generation — it reads files,
+runs `grep`, fetches URLs, executes shell commands, and chains those results together.
+This makes it qualitatively different from a chat interface.
+
+**The self-awareness about uncertainty.** When Claude wasn't sure about the
+Ziggy tagged-union syntax (because there were no direct examples in the fetched
+sources), it said so. It proposed a best-guess and explained the recovery path
+if it was wrong. That's the right engineering attitude.
+
+**The writing quality.** This post exists partly because Claude drafted it from a
+description of the session. I edited heavily, but the raw material was there.
+For technical writing in a second language this is genuinely useful.
+
+---
+
+## What Still Needs a Human
+
+**Semantics in low-level code.** Zig's memory model, comptime, and type system
+require precise reasoning. I wouldn't trust a fully autonomous vibe-coding session
+on a safety-critical embedded component. The AI can scaffold and suggest; the
+engineer must verify.
+
+**Architecture decisions.** Should `zine.ziggy` live at the repo root or be
+gitignored? Should the update workflow commit directly to main or always open a PR?
+These depend on project philosophy that only I can supply.
+
+**Long-horizon context.** Each session starts fresh (unless you resume explicitly).
+The AI doesn't remember that we debated a different approach last week.
+Keep your `CLAUDE.md` up to date — it becomes the project memory.
+
+---
+
+## Practical Tips
+
+- **Write a `CLAUDE.md`** at the repo root. Document conventions, preferred tools,
+  things to avoid. Claude reads it at the start of every session.
+- **Stay in the loop on diffs.** Approve each tool call at the permission boundary;
+  review each file change before committing.
+- **Use `workflow_dispatch`** for automation workflows while you're still validating
+  them. Don't let untested automation run on a schedule against your main branch.
+- **Describe intent, not steps.** "Keep Zine up to date and open a PR" produces
+  better results than "write a sed command to update the hash".
+- **Ask for uncertainty.** If Claude doesn't flag confidence levels, ask: *"What
+  part of this are you least sure about?"*
+
+---
+
+## Closing Thoughts
+
+Vibe coding with Claude has been a net positive for my personal projects.
+It's not magic — it's closer to having a very well-read pair-programmer who is
+fast at research, patient with boilerplate, and honest about the edges of their
+knowledge. The "vibe" part is real: working this way feels lighter and more
+exploratory than sitting alone with a terminal.
+
+For systems programmers worried about correctness: the model isn't replacing
+your judgement, it's amplifying your throughput on the parts that don't require it.
+
+Codebase, `CLAUDE.md`, and all the workflows discussed here live at
+[kassane/kassane.github.io](https://github.com/kassane/kassane.github.io).
