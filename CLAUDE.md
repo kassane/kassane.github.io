@@ -273,8 +273,11 @@ zig build --fetch
 5. `actions/deploy-pages@v4` — deploys to the `github-pages` environment
 
 **Required GitHub repository settings:**
-- GitHub Pages source must be set to "GitHub Actions"
+- GitHub Pages source **must** be set to **"GitHub Actions"** (Settings → Pages → Source). If left on "Deploy from a branch", GitHub will also run `jekyll-build-pages` on the repository root, causing build errors because `.smd` files are not valid Jekyll/YAML.
 - The `GITHUB_TOKEN` needs `pages: write` and `id-token: write` permissions (already configured in the workflow)
+
+**Why `actions/configure-pages` is required:**
+The `actions/configure-pages@v5` step in the build job signals to GitHub that this is a custom Pages deployment. Without it, the Pages service may fall back to running the `jekyll-build-pages` Docker image on the repository source directory, which fails on `.smd` frontmatter syntax.
 
 ---
 
