@@ -4,14 +4,14 @@
 .author = "Matheus Catarino",
 .draft = false,
 .layout = "article.shtml",
-.description = "Zig Package Manager v0.11.x",
+.description = "Zig Package Manager v0.15.x",
 .tags = ["article", "zig", "zig-pkg", "package", "package-manager"]
 ---
 
-## Next Zig version 🦎 - 0.11.x with Package Manager 🇺🇸
+## Zig 🦎 - Package Manager v0.15.x 🇺🇸
 
-Anyone who has been following the development progress of zig already knows that the new version will offer package management
-in addition to many other features.
+Anyone who has been following the development progress of zig already knows that the package manager
+introduced in v0.11.x has since matured and stabilized, along with many other build system refinements.
 
 e.g.:
 
@@ -28,8 +28,9 @@ For anyone not aware of that progress, please see the changelog below and this p
 
 ### How to use `zig-pkg`
 
-* Download [Zig v0.11 or higher](https://ziglang.org/download)
+* Download [Zig v0.15.x or higher](https://ziglang.org/download)
 * Make on your project `build.zig` & `build.zig.zon` file
+* Run `zig fetch --save <url>` to add a dependency (hash is computed automatically)
 
 e.g:
 
@@ -41,12 +42,12 @@ e.g:
         .optimize = optimize, // ditto for `-Doptimize=<...>`
     });
     const mylib = mylib_dep.artifact("mylib"); // <== has the location of the dependency files (mylib)
-    
+
    // your executable config
     exe.linkLibrary(mylib); // <== link mylib
-    exe.addModule("mylib", mylib.module("mylib")); // <== for zig project
+    exe.root_module.addImport("mylib", mylib.module("mylib")); // <== for zig project
     exe.installLibraryHeaders(mylib); // <== get copy mylib headers to zig-out/include (for C or C++ project)
-    
+
 // Glossary:
 // mylib_dep: std.Build.Dependency
 // (mylib_dep.artifact(...) == mylib): std.Build.Step.Compile (eql to addSharedLib/addStaticLib/addExecutable/addObject)
@@ -57,16 +58,18 @@ e.g:
 
 ```zig
 .{
-    .name = "example",
+    .name = .example,
     .version = "0.1.0",
     .dependencies = .{
         .mylib = .{
-            .url = "https://github.com/username/mylib/archive/[tag/commit-hash].tar.gz",
+            .url = "git+https://github.com/username/mylib.git#[commit-hash]",
             .hash = "[multihash - sha256-2]",
         },
     },
+    .paths = .{"."},
 }
 // syntax: zig - nested anon struct
+// tip: run `zig fetch --save git+https://github.com/username/mylib.git#[tag]` to fill url+hash automatically
 ```
 
 ### Explained:
@@ -80,13 +83,10 @@ However, to get the setting up above to work for all other userdev projects it i
  ```
 need on mylib `build.zig` add:
 ```zig
-mylib.installHeader("foo.h", "foo.h"); // copy single-header file to zig-out/include (rename is optional)
-mylib.installHeadersDirectory("include", ""); // <== copy all headers (inc. subdir) to zig-out/include
+mylib.installHeader(b.path("foo.h"), "foo.h"); // copy single-header file to zig-out/include (rename is optional)
+mylib.installHeadersDirectory(b.path("include"), "", .{}); // <== copy all headers (inc. subdir) to zig-out/include
 // or
-mylib.installHeadersDirectoryOptions(.{
-        .source_dir = "src",
-        .install_dir = .header,
-        .install_subdir = "",
+mylib.installHeadersDirectory(b.path("src"), "", .{
         .exclude_extensions = &.{
             "am",
             "gitignore",
@@ -94,7 +94,8 @@ mylib.installHeadersDirectoryOptions(.{
     });
 ```
 It's usual that some unix-like projects contain headers mixed with source code and other files like makefiles.
-Therefore it is necessary to determine what will be copied or not! For some projects, preferable to replace `installHeadersDirectory()` by `installHeadersDirectoryOptions(.{})`.
+Therefore it is necessary to determine what will be copied or not! For some projects, preferable to use the
+options struct of `installHeadersDirectory()` to filter which files are included.
 
 e.g.:
 
@@ -114,29 +115,27 @@ C libraries with `zig-pkg`
 **Note:** No need `build.zig.zon` file to local modules!
 
 ```zig
-exe.addModule("mylib", mylib.module("mylib")); // <== for zig project only
+exe.root_module.addImport("mylib", mylib.module("mylib")); // <== for zig project only
 ```
 need on mylib `build.zig` add:
 ```zig
 const mylib_module = b.createModule(.{
-        .source_file = .{
-            .path = "src/mylib.zig",
-        },
+        .root_source_file = b.path("src/mylib.zig"),
         // optional
-        .dependencies = &.{
+        .imports = &.{
         .{ .name = "foo", .module = foo.module(b) },
         .{ .name = "bar", .module = bar.module(b) },
         .{ .name = "baz", .module = baz.module(b) },
     },
     });
 
-// [...]    
-    mylib.addModule("mylib", mylib_module);
+// [...]
+    mylib.root_module.addImport("mylib", mylib_module);
 ```
 
 Hope you enjoyed this brief post!! 😄
 
-Keep in mind that the zig package manager is still under change, but is already used by some of the most known tools like:
+Keep in mind that the zig package manager is now stable and widely used by some of the most known tools like:
 
 - [zls - zig language server](https://github.com/zigtools/zls)
 - [libxev - event-loop](https://github.com/mitchellh/libxev)

@@ -15,7 +15,10 @@
     // This field is optional.
     // This is currently advisory only; Zig does not yet do anything
     // with this value.
-    .minimum_zig_version = "0.13.0",
+    // Zine v0.11.2 (latest) requires Zig >= 0.15.0.
+    // To upgrade: run `zig fetch --save git+https://github.com/kristoff-it/zine.git#v0.11.2`
+    // then update build.zig — site config moves from build.zig args to a zine.ziggy file.
+    .minimum_zig_version = "0.14.0",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
