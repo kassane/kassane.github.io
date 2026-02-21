@@ -1,0 +1,11 @@
+// Zine site configuration — used by Zine v0.11+
+// Run `zig fetch --save git+https://github.com/kristoff-it/zine.git#v0.11.2`
+// then update build.zig to `zine.website(b, .{})` to activate this file.
+// Docs: https://zine-ssg.io/docs/
+Site {
+    .title = "Kassane Website",
+    .host_url = "https://kassane.github.io",
+    .layouts_dir_path = "layouts",
+    .content_dir_path = "content",
+    .assets_dir_path = "assets",
+}
