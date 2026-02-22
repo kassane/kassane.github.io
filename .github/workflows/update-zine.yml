@@ -59,7 +59,7 @@ jobs:
       # ── 3. Install Zig (needed to run zig fetch --save) ───────────────────
       - name: Setup Zig
         if: steps.check.outputs.needed == 'true'
-        uses: mlugg/setup-zig@v1
+        uses: mlugg/setup-zig@v2
         with:
           version: latest
 
