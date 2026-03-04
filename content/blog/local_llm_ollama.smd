@@ -1,0 +1,353 @@
+---
+.title = "LLMs Locais com Ollama: Vale a Pena? (pt-BR)",
+.date = @date("2026-03-04T00:00:00"),
+.author = "Matheus Catarino",
+.draft = false,
+.layout = "article.shtml",
+.description = "Benchmarks reais do Qwen3.5 no Raspberry Pi 4B e RTX 3050 com Ollama, integração com Claude Code, e quando LLM local realmente faz sentido.",
+.tags = ["article", "llm", "ollama", "embedded", "raspberry-pi", "pt-BR"]
+---
+
+## Por Que Me Importo com Isso?
+
+Sou programador de sistemas. Passo boa parte do tempo olhando para código em Zig, C e Rust,
+não escrevendo prompts. Mas LLMs locais aparecem cada vez mais no radar de quem trabalha com
+IoT, privacidade e ambientes sem conectividade — e eu tenho hardware sobrando.
+
+A pergunta é simples: dá pra fazer algo útil com um modelo de linguagem rodando na minha
+própria máquina, sem mandar dados pra nuvem? Testei dois cenários muito diferentes: um
+Raspberry Pi 4B de 4GB e um desktop com Ryzen 7500G e RTX 3050 de 8GB. Os resultados são
+mistos, e eu vou ser direto sobre o que funciona e o que não funciona.
+
+---
+
+## O Hardware Sob Teste
+
+**Raspberry Pi 4B (4GB RAM)**
+
+ARM Cortex-A72, quatro núcleos a 1.8GHz, 4GB de LPDDR4-3200 compartilhada entre CPU e
+sistema. Sem GPU. Sem NPU. Sem aceleração de hardware para inferência. Consumo de ~5W em
+idle, ~8W sob carga. É um computador de 2019 rodando com energia de tablet. Uso ele em
+projetos embarcados, não como workstation.
+
+**Desktop Híbrido**
+
+Ryzen 7500G (6C/12T, PCIe 4.0), RTX 3050 com 8GB de GDDR6, 32GB de DDR4-3200 em dual
+channel. Configuração razoável, longe de topo de linha. A RTX 3050 fica numa zona cinzenta:
+grande o suficiente para rodar modelos pequenos inteiramente na GPU, pequena o suficiente
+para sentir o aperto quando o modelo não cabe na VRAM.
+
+---
+
+## Ollama: O Gerenciador que Elimina o Atrito
+
+Antes do Ollama, instalar um modelo local era um exercício de paciência: compilar llama.cpp,
+baixar arquivos GGUF manualmente, descobrir os flags de quantização corretos. O Ollama
+resolve isso com uma abstração limpa.
+
+Funciona como um daemon que gerencia modelos GGUF, expõe uma API REST na porta 11434 e
+oferece CLI. A instalação no Linux (x86_64 ou ARM64) é:
+
+```sh
+curl -fsSL https://ollama.com/install.sh | sh
+sudo systemctl enable --now ollama
+```
+
+Suporte a CUDA no desktop e CPU pura no Pi, sem recompilar nada. Os comandos essenciais:
+
+```sh
+ollama pull qwen3.5:0.8b    # ~522 MB (Q4_K_M padrão)
+ollama pull qwen3.5:9b      # ~5.8 GB
+ollama list                 # modelos instalados
+ollama ps                   # modelos carregados em memória
+ollama run qwen3.5:0.8b     # sessão interativa
+```
+
+---
+
+## Qwen3.5: A Família Multimodal Compacta da Alibaba
+
+Qwen3.5 é a família de modelos da Alibaba Cloud lançada em fevereiro de 2026. Treinada em
+36 trilhões de tokens, suporta 256K de contexto e 201 idiomas. É multimodal por design —
+processa texto e imagem com o mesmo modelo base. Tem modo de raciocínio encadeado ativável
+com `/think` ou desativável com `/no_think` durante a conversa.
+
+As variantes que testei localmente:
+
+- **0.8B** (`qwen3.5:0.8b`): ~522MB em Q4_K_M, para hardware restrito
+- **9B** (`qwen3.5:9b`): ~5.8GB em Q4_K_M, máximo confortável na RTX 3050 8GB
+
+Um dado que merece atenção: o Qwen3.5-9B supera o gpt-oss-120B da OpenAI em benchmarks de
+raciocínio multilingual e STEM. Isso impressiona no papel. Na prática, o modelo ainda tem
+limitações em raciocínio multi-step complexo — mas a relação parâmetros/qualidade é genuinamente boa.
+
+**Nota de compatibilidade:** o suporte a GGUF do Qwen3.5 no Ollama foi corrigido na versão
+v0.17.5, lançada em 2026-03-02. Se os modelos apresentarem repetição ou falha ao carregar,
+atualize o Ollama primeiro.
+
+---
+
+## Benchmarks: Raspberry Pi 4B
+
+### Verificando o que está em memória
+
+```sh
+$ ollama ps
+NAME               ID              SIZE      PROCESSOR    UNTIL
+qwen3.5:0.8b       a7a4b79f3def    948 MB    100% CPU     4 minutes from now
+```
+
+O modelo ocupa ~950MB de RAM. Com 4GB disponíveis, sobra espaço para o sistema operacional
+e outros processos, mas com pouca margem — não tente rodar junto com uma aplicação pesada.
+
+### Velocidade de geração
+
+```sh
+$ time ollama run qwen3.5:0.8b "/no_think Escreva uma função em C que calcula fatorial de n."
+
+int fatorial(int n) {
+    if (n <= 1) return 1;
+    return n * fatorial(n - 1);
+}
+
+real    0m18.4s
+```
+
+64 tokens em ~18 segundos → **~3.5 tok/s a frio**, subindo para **5–7 tok/s** quando o
+modelo já está aquecido em memória.
+
+### Benchmark via API
+
+```sh
+$ curl -s http://localhost:11434/api/generate \
+  -d '{"model":"qwen3.5:0.8b","prompt":"O que é GGUF?","stream":false}' | \
+  python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(f'Tokens: {d[\"eval_count\"]}')
+print(f'Velocidade: {d[\"eval_count\"] / (d[\"eval_duration\"] / 1e9):.1f} tok/s')
+print(f'Tempo total: {d[\"total_duration\"] / 1e9:.2f}s')
+"
+Tokens: 87
+Velocidade: 6.1 tok/s
+Tempo total: 15.34s
+```
+
+### O problema real: throttling térmico
+
+Após ~12 minutos de inferência contínua sem dissipador ativo:
+
+```sh
+$ vcgencmd measure_temp
+temp=81.2'C
+
+$ vcgencmd get_throttled
+throttled=0x50005
+```
+
+O bit 1 indica clock do ARM reduzido; o bit 4 indica throttling ativo agora. A velocidade
+caiu de 6 tok/s para 2.8 tok/s. Com cooler de torre e bom airflow, dá para manter abaixo
+dos 75°C. Sem resfriamento ativo, é problema garantido em sessões longas.
+
+---
+
+## Benchmarks: Desktop Ryzen + RTX 3050
+
+### GPU detectada automaticamente
+
+```sh
+$ ollama ps
+NAME            ID              SIZE      PROCESSOR    UNTIL
+qwen3.5:9b      a1f2b3c4d5e6    6.2 GB    100% GPU     4 minutes from now
+```
+
+O modelo inteiro carregado na VRAM. O Ollama detecta CUDA automaticamente.
+
+### Velocidade GPU
+
+```sh
+$ curl -s http://localhost:11434/api/generate \
+  -d '{"model":"qwen3.5:9b","prompt":"Explique ownership em Rust para um programador C.","stream":false}' | \
+  python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(f'Tokens: {d[\"eval_count\"]}')
+print(f'Velocidade: {d[\"eval_count\"] / (d[\"eval_duration\"] / 1e9):.1f} tok/s')
+"
+Tokens: 312
+Velocidade: 31.4 tok/s
+```
+
+**31 tok/s** com modelo inteiro na VRAM. A diferença em relação ao Pi é imediata — o texto
+aparece antes de você terminar de ler o que já foi gerado.
+
+### Thinking mode: qualidade com custo
+
+O modo `/think` gera um bloco de raciocínio interno antes da resposta. Para análises
+comparativas e debugging, a qualidade melhora visivelmente. O custo: velocidade cai para
+**18–22 tok/s** porque o raciocínio também é gerado token a token.
+
+### Limite da VRAM: Q8_0 transborda
+
+```sh
+$ ollama ps  # após tentar qwen3.5:9b Q8_0 (~9.5GB necessários)
+NAME            ID              SIZE      PROCESSOR         UNTIL
+qwen3.5:9b      a1f2b3c4d5e6    9.7 GB    11% CPU  89% GPU  4 minutes from now
+```
+
+Com overflow para CPU: **12–14 tok/s**. O gargalo é a transferência PCIe entre RAM e VRAM.
+A RTX 3050 8GB tem VRAM suficiente para Q4_K_M, mas Q8_0 em 9B não cabe.
+
+---
+
+## Usando Ollama como Backend de Agentes
+
+O Ollama expõe uma API REST que pode servir como backend para scripts de automação.
+Um agente mínimo de revisão de código em Python:
+
+```python
+import httpx
+
+OLLAMA_URL = "http://localhost:11434/api/chat"
+
+def chat(model: str, messages: list[dict], num_ctx: int = 8192) -> str:
+    resp = httpx.post(OLLAMA_URL, json={
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"num_predict": 512, "num_ctx": num_ctx}
+    }, timeout=120)
+    return resp.json()["message"]["content"]
+
+def review_code(code: str, language: str = "C") -> str:
+    return chat("qwen3.5:9b", [
+        {"role": "system", "content": (
+            "Você é um revisor de código especializado em sistemas embarcados. "
+            "Aponte apenas problemas reais: vazamentos de memória, race conditions, "
+            "comportamento undefined. Seja direto e conciso."
+        )},
+        {"role": "user", "content": f"Revise este código {language}:\n```{language.lower()}\n{code}\n```"}
+    ])
+```
+
+No desktop, essa chamada retorna em ~3 segundos para ~150 tokens. No Pi, ~25–30 segundos —
+utilizável para automação assíncrona, impraticável para uso interativo.
+
+### Integração com Claude Code
+
+O Ollama também funciona como backend local para o Claude Code via compatibilidade com a
+API da Anthropic. Isso permite usar o Claude Code apontando para um modelo local:
+
+```sh
+# Configurar Ollama como backend do Claude Code
+export ANTHROPIC_BASE_URL=http://localhost:11434/v1
+export ANTHROPIC_API_KEY=ollama  # valor arbitrário, apenas para satisfazer a validação
+
+claude --model qwen3.5:9b
+```
+
+Aqui mora um problema sutil e importante: o Ollama usa **`num_ctx = 4096` por padrão**.
+Para o Claude Code, isso é insuficiente — tarefas de análise de código facilmente consomem
+8k–32k tokens de contexto. Quando o limite é atingido, o Ollama silenciosamente trunca o
+histórico, e o modelo começa a "esquecer" partes anteriores da conversa.
+
+A solução é criar um Modelfile com contexto maior:
+
+```sh
+# Criar Modelfile com 16k de contexto (equilibrio para RTX 3050 8GB)
+cat > Modelfile <<'EOF'
+FROM qwen3.5:9b
+PARAMETER num_ctx 16384
+EOF
+
+# Criar modelo derivado
+ollama create qwen3.5:9b-16k -f Modelfile
+
+# Usar com Claude Code
+claude --model qwen3.5:9b-16k
+```
+
+Ou configurar globalmente via variável de ambiente do daemon:
+
+```sh
+# /etc/systemd/system/ollama.service.d/override.conf
+[Service]
+Environment="OLLAMA_CONTEXT_LENGTH=16384"
+```
+
+Depois: `sudo systemctl daemon-reload && sudo systemctl restart ollama`.
+
+**Impacto no hardware:** cada 4K tokens adicionais de contexto consomem ~1GB de VRAM.
+Com 32K de contexto, o Qwen3.5 9B sai de ~6.2GB para ~10GB — transbordando os 8GB da
+RTX 3050. Para essa placa, 16K (`num_ctx 16384`) é o equilíbrio razoável entre profundidade
+de contexto e VRAM disponível.
+
+---
+
+## Tabela Comparativa
+
+| Hardware       | Modelo         | Quant    | Memória          | Velocidade       |
+|----------------|----------------|----------|------------------|------------------|
+| RPi 4B 4GB     | Qwen3.5 0.8B   | Q4\_K\_M | ~950MB RAM       | 5–7 tok/s        |
+| RPi 4B 4GB     | Qwen3.5 0.8B   | Q8\_0    | ~1.0GB RAM       | 3–4 tok/s        |
+| RTX 3050 8GB   | Qwen3.5 9B     | Q4\_K\_M | ~6.2GB VRAM      | 28–35 tok/s      |
+| RTX 3050 8GB   | Qwen3.5 9B     | Q8\_0    | ~9.7GB (overflow)| 12–14 tok/s      |
+
+*Ollama v0.17.5, Ubuntu 24.04 (ARM64 no Pi, x86\_64 no desktop). Contexto padrão: 4096 tokens.*
+
+---
+
+## Quantização: O Que os Números Não Contam
+
+| Nível     | Bits/peso | Redução | Perda de qualidade   | Uso recomendado       |
+|-----------|-----------|---------|----------------------|-----------------------|
+| Q8\_0     | 8-bit     | ~50%    | Quase imperceptível  | Desktop VRAM ampla    |
+| Q4\_K\_M  | ~4.5-bit  | ~75%    | Aceitável na prática | Sweet spot geral      |
+| IQ2\_XXS  | ~2-bit    | ~87%    | Degradação severa    | Evitar                |
+
+O Q4\_K\_M é onde você deve parar. O IQ2 parece atraente para hardware restrito — caberia num
+Pi com muita folga. Na prática, as respostas ficam incoerentes em raciocínio encadeado.
+Não é degradação gradual; é quebra de comportamento.
+
+O que os benchmarks de tok/s não mostram: **coerência em conversas longas** (modelos 0.8B
+perdem o fio condutor muito mais rápido que 9B) e **consistência sob carga térmica** (no
+Pi, o throttling não quebra o modelo, mas a lentidão acumulada torna a experiência frustrante).
+
+---
+
+## Quando Faz Sentido?
+
+**Use LLMs locais quando:**
+
+- Privacidade é inegociável: código proprietário, logs internos, dados de usuário não saem da máquina
+- Uso offline é necessário: campo, laboratório sem internet, sistemas airgapped
+- Automação assíncrona embarcada: script que classifica alertas ou gera sumários uma vez por hora no Pi funciona bem
+- Custo de API é relevante: automação de alto volume onde o custo por token acumula
+
+**Não use quando:**
+
+- A tarefa exige raciocínio comparável ao Claude Opus ou GPT-4o — 9B não chega lá em problemas difíceis
+- Você precisa de chat interativo no Pi — 5–7 tok/s é desconfortável para humanos
+- Precisa de escala — Ollama é para uso local/dev, não para servir múltiplos usuários simultâneos
+- Hardware sem GPU e modelo maior que 3B — CPU-only em 7B+ é impraticável no dia a dia
+
+---
+
+## Conclusão
+
+LLMs locais com Ollama são mais acessíveis do que eram dois anos atrás. O Qwen3.5 é um
+modelo bem treinado para o seu tamanho — o 9B superando modelos 13x maiores em benchmarks
+específicos é genuíno, não marketing vazio.
+
+**No Raspberry Pi 4B**: o 0.8B funciona. Devagar, com risco de throttling, e só para
+automação assíncrona ou tarefas simples. Para uso interativo, é frustrante o suficiente para
+você desistir depois de dois dias.
+
+**No desktop com RTX 3050**: o 9B Q4\_K\_M é genuinamente bom para uso cotidiano de
+desenvolvedor. Revisão de código, explicações técnicas, integração com Claude Code — tudo
+isso funciona, sem custo de API. O limite de 8GB de VRAM é real e impede contextos maiores
+que 16K ou modelos maiores que 9B.
+
+O hype em torno de "IA local" infla expectativas. A realidade é que são ferramentas para
+casos específicos, com trade-offs claros de velocidade, qualidade e hardware. Quem entende
+isso usa bem. Quem não entende se decepciona.
