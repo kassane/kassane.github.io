@@ -16,7 +16,7 @@ IoT, privacidade e ambientes sem conectividade — e eu tenho hardware sobrando.
 
 A pergunta é simples: dá pra fazer algo útil com um modelo de linguagem rodando na minha
 própria máquina, sem mandar dados pra nuvem? Testei dois cenários muito diferentes: um
-Raspberry Pi 4B de 4GB e um desktop com Ryzen 7500G e RTX 3050 de 8GB. Os resultados são
+Raspberry Pi 4B de 4GB e um desktop com Ryzen 7 5700G e RTX 3050 de 8GB. Os resultados são
 mistos, e eu vou ser direto sobre o que funciona e o que não funciona.
 
 ---
@@ -147,8 +147,9 @@ $ vcgencmd get_throttled
 throttled=0x50005
 ```
 
-O bit 1 indica clock do ARM reduzido; o bit 4 indica throttling ativo agora. A velocidade
-caiu de 6 tok/s para 2.8 tok/s. Com cooler de torre e bom airflow, dá para manter abaixo
+O bit 0 (`0x1`) indica sub-tensão detectada; o bit 2 (`0x4`) indica throttling ativo agora;
+bits 16 e 18 confirmam que ambos já ocorreram nesta sessão. A velocidade caiu de 6 tok/s
+para 2.8 tok/s. Com cooler de torre e bom airflow, dá para manter abaixo
 dos 75°C. Sem resfriamento ativo, é problema garantido em sessões longas.
 
 ---
