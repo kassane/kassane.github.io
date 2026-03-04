@@ -81,8 +81,6 @@ Um dado que merece atenção: o Qwen3.5-9B supera o gpt-oss-120B da OpenAI em be
 raciocínio multilingual e STEM. Isso impressiona no papel. Na prática, o modelo ainda tem
 limitações em raciocínio multi-step complexo — mas a relação parâmetros/qualidade é genuinamente boa.
 
-![Qwen3.5 Small Models — benchmark de desempenho comparativo (fonte: QwenLM/Alibaba Cloud)](https://qianwen-res.oss-accelerate-overseas.aliyuncs.com/Qwen3.5/Figures/qwen3.5_small_size_score.png)
-
 **Nota de compatibilidade:** o suporte a GGUF do Qwen3.5 no Ollama foi corrigido na versão
 v0.17.5, lançada em 2026-03-02. Se os modelos apresentarem repetição ou falha ao carregar,
 atualize o Ollama primeiro.
