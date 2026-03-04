@@ -32,7 +32,7 @@ projetos embarcados, não como workstation.
 
 **Desktop Híbrido**
 
-Ryzen 7500G (6C/12T, PCIe 4.0), RTX 3050 com 8GB de GDDR6, 32GB de DDR4-3200 em dual
+Ryzen 7500G (6C/12T, PCIe 4.0), RTX 3050 com 8GB de GDDR6, 32GB de DDR5-3200 em dual
 channel. Configuração razoável, longe de topo de linha. A RTX 3050 fica numa zona cinzenta:
 grande o suficiente para rodar modelos pequenos inteiramente na GPU, pequena o suficiente
 para sentir o aperto quando o modelo não cabe na VRAM.
