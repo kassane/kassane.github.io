@@ -81,6 +81,8 @@ Um dado que merece atenção: o Qwen3.5-9B supera o gpt-oss-120B da OpenAI em be
 raciocínio multilingual e STEM. Isso impressiona no papel. Na prática, o modelo ainda tem
 limitações em raciocínio multi-step complexo — mas a relação parâmetros/qualidade é genuinamente boa.
 
+![Qwen3.5 Small Models — benchmark de desempenho comparativo (fonte: QwenLM/Alibaba Cloud)](https://qianwen-res.oss-accelerate-overseas.aliyuncs.com/Qwen3.5/Figures/qwen3.5_small_size_score.png)
+
 **Nota de compatibilidade:** o suporte a GGUF do Qwen3.5 no Ollama foi corrigido na versão
 v0.17.5, lançada em 2026-03-02. Se os modelos apresentarem repetição ou falha ao carregar,
 atualize o Ollama primeiro.
@@ -330,6 +332,44 @@ Pi, o throttling não quebra o modelo, mas a lentidão acumulada torna a experi�
 - Você precisa de chat interativo no Pi — 5–7 tok/s é desconfortável para humanos
 - Precisa de escala — Ollama é para uso local/dev, não para servir múltiplos usuários simultâneos
 - Hardware sem GPU e modelo maior que 3B — CPU-only em 7B+ é impraticável no dia a dia
+
+---
+
+## Na Comunidade
+
+O lançamento da série Small foi bem recebido por quem experimenta LLMs locais. Alguns posts
+que capturam bem o momento:
+
+> **[@UnslothAI](https://x.com/UnslothAI/status/2028463220063871426)** · 2 mar 2026
+>
+> *"Qwen releases 4 new Qwen3.5 Small models! Qwen3.5: 0.8B • 2B • 4B • 9B. Run
+> Qwen3.5-0.8B, 2B and 4B on your phone. Run 9B on 6GB RAM. The vision reasoning LLMs
+> perform better than models 4x their size."*
+
+> **[@lmstudio](https://x.com/lmstudio/status/2028658162383884289)** · 3 mar 2026
+>
+> *"Qwen3.5-9B is an incredibly strong little model you can download and run on your
+> computer. It can take images as input, can think, and call tools. Requires only ~7GB
+> to run locally 🤯🚀"*
+
+> **[@Alibaba\_Qwen](https://x.com/Alibaba_Qwen/status/2026339351530188939)** · 24 fev 2026
+>
+> *"Introducing the Qwen 3.5 Medium Model Series [...] Qwen3.5-35B-A3B now surpasses
+> Qwen3-235B-A22B-2507 — a reminder that better architecture, data quality, and RL can
+> move intelligence forward, not just bigger parameter counts."*
+
+O entusiasmo é real, mas vale manter o ceticismo saudável: benchmarks controlados nem sempre
+se traduzem em desempenho real nas suas tarefas específicas. O que esses posts confirmam é
+que os modelos cabem em hardware de consumo — o que você faz com isso depende de você.
+
+**Para explorar mais:**
+
+- [Qwen3.5 — repositório oficial (GitHub)](https://github.com/QwenLM/Qwen3.5)
+- [Qwen3.5 no Ollama Library](https://ollama.com/library/qwen3.5)
+- [Integração Claude Code + Ollama (docs oficiais)](https://docs.ollama.com/integrations/claude-code)
+- [Guia de uso local — Unsloth](https://unsloth.ai/docs/models/qwen3.5)
+- No YouTube, busque por *"Qwen3.5 Ollama tutorial"* — canais como **Prompt Engineering**,
+  **Matt Williams** e **David Shapiro** costumam ter demos atualizadas dentro de dias do lançamento.
 
 ---
 
