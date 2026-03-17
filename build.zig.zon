@@ -6,7 +6,8 @@
     //
     // It is redundant to include "zig" in this name because it is already
     // within the Zig package namespace.
-    .name = "kassane.github.io",
+    .name = .kassane_github_io,
+    .fingerprint = 0xc7f568e9089e8549,
 
     // This is a [Semantic Version](https://semver.org/).
     // In a future version of Zig it will be used for package deduplication.
@@ -15,10 +16,7 @@
     // This field is optional.
     // This is currently advisory only; Zig does not yet do anything
     // with this value.
-    // Zine v0.11.2 (latest) requires Zig >= 0.15.0.
-    // To upgrade: run `zig fetch --save git+https://github.com/kristoff-it/zine.git#v0.11.2`
-    // then update build.zig — site config moves from build.zig args to a zine.ziggy file.
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.0",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
@@ -27,8 +25,8 @@
     // internet connectivity.
     .dependencies = .{
         .zine = .{
-            .url = "git+https://github.com/kristoff-it/zine.git#7feb9e2389f015f56fc86cc90ab581b9ba3a21c6",
-            .hash = "1220e1db0d9ad44ba2cb484d202cdbc2d9d62d6ec329b418d61ea13f09ab4f69df5c",
+            .url = "git+https://github.com/kristoff-it/zine.git#5a01fa5c9bad6a0c3055c523ee0ef848bb11c743",
+            .hash = "zine-0.11.2-ou6nINh3FgANNoH-3RUaEWOc3ax5zfWiL8a4lt4hDhpG",
         },
     },
     .paths = .{"."},

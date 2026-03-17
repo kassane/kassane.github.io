@@ -1,6 +1,7 @@
 name: Deploy to GitHub Pages
 
 on:
+  pull_request:
   workflow_dispatch:
   push:
     branches: [main]
@@ -14,10 +15,10 @@ permissions:
   pages: write
   id-token: write
 
-# Prevent concurrent deployments; allow in-progress runs to finish
+# PR builds cancel previous runs for the same branch; main deployments never cancel
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -32,12 +33,13 @@ jobs:
       # not a Jekyll build. Without this step GitHub Pages falls back to
       # running jekyll-build-pages on the repository root.
       - name: Configure Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
 
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.13.0
+          version: 0.15.2
 
       - name: Build
         run: zig build --summary new
@@ -46,11 +48,13 @@ jobs:
         run: python3 tools/gen_rss.py
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: zig-out
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
