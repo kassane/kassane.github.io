@@ -100,7 +100,7 @@ QMAKE_POST_LINK = $${DEPLOY_COMMAND} $${DEPLOY_TARGET}
 
 **Método 2:**
 - Abra o seu projeto no _QtCreator_ e aperte Ctrl+5 -> Run -> Add Step Deploy e escolha a opção Custom.
-[screen-view](https://user-images.githubusercontent.com/6756180/44786137-8d93f580-ab69-11e8-9a53-e3427d8f045b.PNG)
+![screen-view](https://user-images.githubusercontent.com/6756180/44786137-8d93f580-ab69-11e8-9a53-e3427d8f045b.PNG)
 E por fim clique com o botão direito do mouse sobre o projeto e escolha deploy ou simplesmente vai no Menu -> Build -> Deploy
 
 **PS:** Quando se trata de library externo como libSql, entre outros. Você colocará manualmente na pasta do seu **_Executável_**(_Modo: **Release**_) e não do _Projeto source_. Se você for usar **_MSVC_** não esqueçam de acrescentar na pasta do **_Executável_** o _vcredist_(da mesma plataforma  da build), então se for usar um instalador (_InnoSetup, NSIS, Advanced Installer, Qt Installer Framework_) terá todas as dependencias necessárias da **M$** inclusas.
