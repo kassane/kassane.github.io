@@ -5,8 +5,7 @@
 .draft = false,
 .layout = "article.shtml",
 .description = "Benchmarks reais do Qwen3.5 no Raspberry Pi 4B e RTX 3050 com Ollama, integração com Claude Code, e quando LLM local realmente faz sentido.",
-.tags = ["article", "llm", "ollama", "embedded", "raspberry-pi", "pt-BR"],
-.custom = .{ .language = "pt" }
+.tags = ["article", "llm", "ollama", "embedded", "raspberry-pi", "pt-BR"]
 ---
 
 ## Por Que Me Importo com Isso?

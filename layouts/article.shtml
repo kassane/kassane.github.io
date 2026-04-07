@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html :attr-lang="$page.custom.language">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
