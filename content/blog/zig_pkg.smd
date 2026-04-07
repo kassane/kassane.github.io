@@ -5,7 +5,8 @@
 .draft = false,
 .layout = "article.shtml",
 .description = "Zig Package Manager v0.15.x",
-.tags = ["article", "zig", "zig-pkg", "package", "package-manager"]
+.tags = ["article", "zig", "zig-pkg", "package", "package-manager", "en-US"],
+.custom = .{ .language = "en" }
 ---
 
 ## Zig 🦎 - Package Manager v0.15.x 🇺🇸

@@ -624,6 +624,37 @@ a:visited {
     font-style: italic;
 }
 
+/* ── Article tags ───────────────────────────────────────────────────── */
+.article-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+}
+
+.tag {
+    display: inline-block;
+    padding: 0.15em 0.55em;
+    border-radius: var(--border-radius);
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: var(--srcery-xgray3);
+    color: var(--srcery-white-bright);
+    letter-spacing: 0.03em;
+    text-transform: lowercase;
+}
+
+/* Language tags — BCP 47 locale codes get distinct colours */
+.tag[data-tag="pt-BR"] {
+    background: var(--srcery-green);
+    color: var(--srcery-black);
+}
+
+.tag[data-tag="en-US"] {
+    background: var(--srcery-blue);
+    color: var(--srcery-white-bright);
+}
+
 /* ── Site footer ────────────────────────────────────────────────────── */
 .site-footer {
     margin-top: var(--space-xl);

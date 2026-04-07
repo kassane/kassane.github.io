@@ -5,7 +5,8 @@
 .draft = false,
 .layout = "article.shtml",
 .description = "Tips para desenvolvimento em Windows com Qt",
-.tags = ["article", "qt", "windows", "pt-BR", "mingw"]
+.tags = ["article", "qt", "windows", "pt-BR", "mingw"],
+.custom = .{ .language = "pt" }
 ---
 
 ## Dicas ([Grupo Qt Brasil](https://t.me/qtbrasil))

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html :attr-lang="$page.custom.language">
 
 <head>
   <meta charset="UTF-8">
@@ -68,6 +68,9 @@
             Published on
             <time :text="$page.date.format('January 02, 2006')"></time>
           </span>
+        </div>
+        <div class="article-tags" aria-label="Tags">
+          <span class="tag" :loop="$page.tags" :attr-data-tag="$loop.it" :text="$loop.it"></span>
         </div>
       </div>
 

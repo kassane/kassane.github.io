@@ -5,7 +5,8 @@
 .draft = false,
 .layout = "article.shtml",
 .description = "My experiences coding in a vibe style using Claude Code as a pair-programmer for systems-level work",
-.tags = ["article", "claude", "ai", "vibe-coding", "zig", "ci-cd", "en-US"]
+.tags = ["article", "claude", "ai", "vibe-coding", "zig", "ci-cd", "en-US"],
+.custom = .{ .language = "en" }
 ---
 
 ## What is Vibe Coding?
