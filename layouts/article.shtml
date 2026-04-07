@@ -69,6 +69,9 @@
             <time :text="$page.date.format('January 02, 2006')"></time>
           </span>
         </div>
+        <div class="article-tags" aria-label="Tags">
+          <span class="tag" :loop="$page.tags" :attr-data-tag="$loop.it" :text="$loop.it"></span>
+        </div>
       </div>
 
       <!-- Article body column -->
