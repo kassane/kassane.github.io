@@ -1,0 +1,860 @@
+---
+.title = "Zig on the MOS 6502 (en-US)",
+.date = @date("2026-04-24T00:00:00"),
+.author = "Matheus Catarino",
+.draft = false,
+.layout = "article.shtml",
+.description = "A technical tour of Zig targeting the 6502 via llvm-mos — what exists, what I fixed, what's still missing.",
+.tags = ["article", "zig", "mos6502", "llvm-mos", "retro-computing", "en-US"]
+---
+
+## Why does this even exist?
+
+Most of my time is spent staring at Zig, C, and Rust,
+and generating code for the MOS 6502 is not exactly where the industry puts its R&D
+budget these days. So why should you read an entire post about a chip released in 1975?
+
+Because the ecosystem didn't die. It transformed. Let me list what's happening
+on active hardware right now:
+
+- **[MEGA65](https://mega65.org/)** — an FPGA implementation of the never-released Commodore 65, with boards
+  being produced and sold by the MEGA65 Organization. The CPU is the 45GS02, a superset
+  of the 65CE02 with extended instructions and memory mapping up to 28 bits.
+- **[Commander X16](https://www.commanderx16.com/)** — David Murray's project (the "The 8-Bit Guy" YouTube channel), using
+  a WDC 65C02 at 8MHz, VERA as a custom GPU, and boards produced on demand. His idea was
+  to build "the 8-bit computer Commodore should have made in 1987".
+- **[Neo6502](https://www.olimex.com/Products/Retro-Computers/Neo6502/)** — a small board that puts a real W65C02 at 6MHz as the main CPU while
+  using a Raspberry Pi RP2040 as an I/O, video, and sound coprocessor. Accessible DIY
+  kit with an open hardware manual.
+- **Classic homebrew** — the NES, C64, Atari 2600, and Atari 8-bit all have active
+  development communities. Demo parties happen every year. New cartridges keep
+  getting pressed for the NES with modern mappers like the MMC5 and Action 53.
+
+Put it all together and the 6502 is an architecture with purchasable new hardware,
+public documentation, an active community, and real use cases ranging from fun
+(homebrew) to serious embedded work (Neo6502 in educational projects).
+
+The relevant question is no longer "does a decent compiler exist for the 6502?" — that
+was answered in the 90s with cc65 and definitively solved in 2020 when llvm-mos arrived.
+The question now is: **which toolchain do you choose, and how painful is its bootstrap?**
+
+This post is about the less obvious answer: using Zig as your source language to generate
+6502 code. It is also an honest record of what cost me debugging time, what is broken
+today, and exactly where the experimental fork I maintain leaves you hanging.
+If you want the short version: cc65 works, llvm-mos+C works better, zig-mos is serious
+experimentation for people who already live in Zig.
+
+---
+
+## The ecosystem, and why llvm-mos matters so much
+
+Before diving into the details, it helps to have a mental map of who's who in this
+ecosystem. A lot of people confuse these names and end up lost.
+
+| Tool              | What it is                                                                            | Status                                  |
+|-------------------|---------------------------------------------------------------------------------------|-----------------------------------------|
+| **cc65**          | Classic C toolchain originally written in 1999, maintained for 25+ years             | Stable, de facto community standard     |
+| **llvm-mos**      | Out-of-tree LLVM fork; custom regalloc with imaginary registers in ZP                | Active, **not** merged upstream         |
+| **llvm-mos-sdk**  | v23.0.1 — platform libs and linker scripts for 29+ platforms                         | Active, released alongside llvm-mos     |
+| **rust-mos**      | Fork of `rustc` that uses llvm-mos as its backend                                    | Experimental, **not** an official target|
+| **mos-hardware**  | Rust crate by Mikael Lund — typed MMIO for C64/MEGA65/X16                            | Active                                  |
+| **mega65-libc**   | Official C library from the MEGA65 org, with 45GS02 support                          | Active, maintained by MEGA65 itself     |
+| **zig-mos**       | Fork of Zig that links against llvm-mos instead of vanilla LLVM                      | Experimental (this is what I maintain)  |
+
+Let me stop and emphasize a point that is a constant source of confusion: **llvm-mos is
+not an official LLVM target**. It has never been upstreamed. And there are legitimate
+technical reasons for that — it is not a political dispute.
+
+llvm-mos implements a concept called "imaginary registers" to work around the absurd
+reality that the 6502 has only three general-purpose registers (A, X, Y), all 8-bit.
+In practice, llvm-mos treats a configurable region of the **zero page** (the first 256
+bytes of RAM, which on the 6502 have a faster addressing mode) as if they were registers.
+This fundamentally changes how LLVM's register allocator operates — the standard regalloc
+assumes a fixed, small set of physical registers of uniform size. Adapting this required
+touching sensitive parts of the LLVM backend and inventing new abstractions.
+
+That diff is in the range of **22 thousand lines** and has to be rebased against the
+LLVM main branch periodically. There have been upstream discussions, but the LLVM core
+team has historically rejected 8-bit targets in the main tree — the maintenance cost is
+high for a niche target. You can read the thread on their Discourse by searching for "AVR
+removal" and "MOS target": the topic comes up regularly.
+
+Pragmatically: you download llvm-mos as an independent toolchain, it lives in parallel
+with your system LLVM, and that's that. rust-mos and zig-mos do exactly the same thing —
+they swap the vendored LLVM in rustc/zig for llvm-mos when compiling.
+
+---
+
+## Where Zig fits, and the two-clang problem
+
+Zig has no native 6502 backend. Whether that changes is an open question —
+[ziglang/zig#6502](https://github.com/ziglang/zig/issues/6502) exists, the number is
+not a coincidence, and the project explicitly welcomes a non-LLVM backend contribution
+from anyone willing to do the work. Zig's native backend (the self-hosted "legalize"
+backend that Mitchell and Andrew have worked on for years) is focused on modern
+architectures — x86_64, aarch64, riscv64, wasm — and the 6502's ABI is genuinely
+bizarre, so this isn't a near-term roadmap item. But it's an open door, not a closed one.
+
+What does exist is a fork of Zig that swaps the vendored LLVM for llvm-mos. That is
+`zig-mos-bootstrap`. The bootstrap philosophy is the same as upstream Zig: use `zig cc`
+to cross-compile LLVM itself, zero dependency on the host system beyond libc, a C++
+compiler for the first stage, and make/ninja.
+
+The detail that confuses everyone installing for the first time is that **after the
+bootstrap you end up with two clangs on your machine**, and they do different things:
+
+```sh
+$ zig cc --version
+clang version 21.0.0git
+# This is the clang embedded inside the Zig 0.17.0-mos-dev binary itself.
+# It is used for:
+#   - translate-c (generating Zig bindings from C headers)
+#   - compiling C/C++ code for the HOST (e.g., build deps of Zig itself)
+#   - building LLVM during bootstrap
+
+
+$ /opt/llvm-mos-sdk/bin/clang --version
+clang version 23.0.0git (https://github.com/llvm-mos/llvm-mos 7d28431a...)
+# This is the clang that LIVES INSIDE the llvm-mos-sdk.
+# It is the one that knows how to generate 6502 code with the custom regalloc.
+# It is what compiles the platform libs (neslib.c, c64.c, mega65.c, etc).
+```
+
+Notice the versions: 21.0.0git versus 23.0.0git. **Two releases apart**. That is not
+carelessness — it is the inevitable consequence of the release cycle. Upstream Zig picks
+a stable LLVM version and vendors it. llvm-mos tracks LLVM main with a small lag.
+The zig-mos fork pulls llvm-mos, which is further along. So yes, you have two clangs
+two years apart, and that is the correct behaviour.
+
+Compiling Zig code for the 6502 goes through this pipeline:
+
+1. The Zig frontend parses your `.zig` file and generates **AIR** (Zig's internal analyzed IR).
+2. The Zig backend translates AIR to **LLVM IR**, using llvm-mos structs.
+3. llvm-mos takes the LLVM IR and generates 6502 assembly through the custom regalloc.
+4. `ld.lld` (the llvm-mos linker, based on LLD) links against the platform libs from the SDK.
+5. You have a `.nes`, `.prg`, `.d81`, or whatever format is ready to run in an emulator or
+   on real hardware.
+
+At no point does the `zig cc` clang 21 touch code destined for the 6502. It is
+build infrastructure, not a cross-compilation backend.
+
+---
+
+## Smoke test — the minimum thing that proves the toolchain works
+
+Enough theory. Do you want to know if the zig-mos fork works on your machine? These three
+commands will tell you:
+
+```sh
+zig version
+# 0.17.0-mos-dev  (fork build; llvm-mos LLVM 21, SDK v23.0.1)
+
+cat > hello_mos.zig << 'EOF'
+export fn _start() callconv(.c) noreturn { while (true) {} }
+EOF
+
+zig build-obj -target mos-freestanding-none -mcpu=mos6502 -femit-llvm-ir hello_mos.zig | head -4 hello_mos.ll
+# target datalayout = "e-m:e-p:16:8-p1:8:8-i16:8-i32:8-i64:8-f32:8-f64:8-a:8-Fi8-n8"
+# target triple = "mos-unknown-unknown-unknown"
+```
+
+That looks trivial. It isn't. There are at least four things in that output you need to
+understand before writing a single new line of code, or you will lose hours later:
+
+**1. Zig's architecture name is `mos`, not `mos6502`.** That contradicts intuition and the
+convention that rust-mos itself uses (`mos` too — just to be clear, it is **not `mos6502`**).
+The specific core variant goes in `-mcpu=`: `mos6502`, `mos65c02`, `mosw65c02`, `mos65el02`,
+`mos65ce02`, `mos45gs02`. If you write `-target mos6502-freestanding-none`, nothing compiles
+and the error message is cryptic.
+
+**2. The four-part triple.** `mos-unknown-unknown-unknown`. Three `unknown`s — the arch is
+`mos`, then vendor, os, and environment are all unknown. That
+looks like a placeholder but it is exactly what llvm-mos expects. The format is
+`arch-vendor-os-environment`, and on a bare-metal 6502 you have no known vendor, no OS, no
+environment. So it's three unknowns, literally. If you try to "fix" it to
+`mos-unknown-none-unknown`, the backend complains.
+
+**3. The datalayout string is the most important specification in this backend.** Decoded:
+   - `e-` → little-endian (the original 6502 is natively little-endian; a `u16` load/store
+     puts the low byte first).
+   - `m:e` → ELF mangling.
+   - `p:16:8` → **16-bit pointer, 1-byte aligned**. This means `usize = u16` in Zig.
+     Memorize that. Every `std` API that assumes `usize >= 32 bits` will behave strangely
+     or fail to compile.
+   - `p1:8:8` → the address-space-1 pointer (zero page) is 8 bits wide. In Zig source you
+     write `addrspace(.zp)`. ZP pointers have their `abiSize` and `bitSize` correctly
+     calculated as 8 bits. `[*]addrspace(.zp) u8` is the native Zig type for fast ZP
+     pointer operations.
+   - `i16:8-i32:8-i64:8-f32:8-f64:8` → every integer and float type is 1-byte aligned.
+     The 6502 has no alignment requirement — every byte is directly addressable. This
+     differs from x86_64 where `u64` typically aligns to 8.
+   - `a:8-Fi8-n8` → aggregate alignment 1 byte, function alignment 1 byte, native
+     integer width 8 bits.
+
+**4. An 8-bit compiler changes your mental model of sizes.** `usize = u16` has cascading
+consequences. `@sizeOf(usize) == 2`. A `[]u8` slice occupies 4 bytes (pointer + length,
+both 16-bit). Comparing two cursor-style slices requires two 16-bit comparisons. You see
+this in the generated code. That cost awareness is what makes 6502 development "different"
+from x86_64 development.
+
+---
+
+## The full CPU list — it's more than just the 6502
+
+Before going further, let me debunk a common assumption: "llvm-mos only compiles for the
+6502". That's not true. The backend covers an entire family of 6502 derivatives and even
+distant cousins that share partial ISAs:
+
+```
+mos, mos4510, mos45gs02, mos6502, mos6502x, mos65c02, mos65ce02,
+mos65dtv02, mos65el02, moshuc6280, mosr65c02, mosspc700, mossweet16,
+mosw65816, mosw65c02
+```
+
+What each one actually is:
+
+- **mos6502** — the original NMOS 6502, 1975. The one in the NES (Ricoh 2A03), Apple II,
+  Atari 2600, and Commodore 64 (as the 6510 variant).
+- **mos6502x** — mos6502 with documented "illegal" opcodes enabled (`LAX`, `SAX`, `SLO`,
+  etc.). Some advanced demos and games deliberately use these.
+- **mos65c02** / **mosw65c02** / **mosr65c02** — the CMOS 65C02 families from WDC and
+  Rockwell. New instructions (`PHX`, `PHY`, `STZ`, `BRA`). The Commander X16 uses the W65C02.
+- **mos65ce02** / **mos4510** / **mos45gs02** — the CSG 65CE02 and its supersets used
+  in the 64x/MEGA65 line. Z register, extended memory mapping.
+- **mos65dtv02** — the variant in the C64 DTV (a C64 crammed into a joystick), DTV-specific
+  extensions.
+- **mos65el02** — EL02, a rare embedded variant.
+- **moshuc6280** — the Hudson Soft HuC6280, the heart of the **PC Engine / TurboGrafx-16**.
+  6502 derivative plus block-transfer instructions.
+- **mosw65816** — the WDC 65816, the 16-bit CPU used in the **SNES** and the Apple IIGS.
+  Has a "6502 emulation" mode and a "native 16-bit" mode.
+- **mosspc700** — the Sony SPC700, the dedicated audio coprocessor inside the **SNES**. Not
+  strictly a 6502 derivative, but the ISA is close enough that llvm-mos supports it.
+- **mossweet16** — Sweet16, the 16-bit virtual machine Woz wrote for the Apple II in 1977
+  to save ROM space. Supporting this in a modern LLVM backend is pure dedication to the craft.
+
+In other words: talking about "llvm-mos" and only thinking of the 6502 is selling it short.
+When you get the SDK, you get SNES, PC Engine, and MEGA65 in the same package.
+
+---
+
+## Why `-mcpu=` matters — the same source, two ISAs
+
+Abstractly, "NMOS 6502" vs "CMOS W65C02" sounds like an academic distinction. In practice,
+it is a brutal difference in the generated code. Let me show two trivial Zig examples
+compiled against both CPUs, looking at the `objdump` output:
+
+```
+=== mos6502 ===
+push_x:
+    clc
+    adc #$1         ; 2 instructions, 4 bytes
+    rts
+
+store_zero:
+    lda #$0
+    tay
+    sta ($0),y      ; indirect-indexed via ZP with Y
+    rts
+```
+
+```
+=== mosw65c02 ===
+push_x:
+    inc             ; 1 instruction — accumulator INC is W65C02 only
+    rts
+
+store_zero:
+    lda #$0
+    sta ($0)        ; zero-page indirect WITHOUT Y — W65C02 only
+    rts
+```
+
+Look at the size difference. `push_x` went from 4 bytes to 1 byte. `store_zero` lost the
+`TAY` entirely. The W65C02 code is so much denser that it would make you question whether
+there's any point in supporting the original 6502... if it weren't for the fact that
+**the Ricoh 2A03 in the NES is a plain NMOS 6502**, and the W65C02's `INC A`, when executed
+on the 2A03, is an undocumented NOP that **increments nothing**.
+
+This is the exact reason why gotcha #3 below is so cruel: the code compiles cleanly, links
+cleanly, produces a valid `.nes`, and **fails at runtime** on real hardware or cycle-accurate
+emulators like Mesen. Compile the same NES game with `-mcpu=mos6502` and `-mcpu=mosw65c02`
+and you have two ROMs that **look** identical under a casual disassembler but **behave
+differently** on every W65C02-only instruction emitted.
+
+---
+
+## Imaginary registers — how llvm-mos extracts codegen from three real registers
+
+I mentioned earlier that llvm-mos has "imaginary registers" and that they are the heart of
+the backend. Let me be concrete about how this works, because it is a detail that **changes**
+how you think about debugging and linker scripts in modern 6502 development.
+
+The 6502 has three general-purpose registers: A (8 bits), X (8 bits), Y (8 bits). No decent
+compiler can allocate real variables to just those three registers. llvm-mos's solution is to
+treat **32 bytes of zero page** as **16 imaginary pointer registers** (`__rs0`–`__rs15`), each
+16 bits wide. Each `rs` register subdivides into two 8-bit byte registers: `__rs0` maps to
+{`__rc0`, `__rc1`}, `__rs1` to {`__rc2`, `__rc3`}, and so on through `__rs15` = {`__rc30`,
+`__rc31`}. The llvm-mos calling convention uses these imaginary registers for parameter
+passing, return values, and compiler temporaries.
+
+This shows up in `nm` output. Example from a compiled fibonacci:
+
+```sh
+$ llvm-nm fib.o | grep __rc
+         U __rc2
+         U __rc3
+         U __rc16
+         U __rc17
+```
+
+Those symbols are **undefined** in the `.o` — they are resolved by platform linker scripts.
+Example from the NES linker script:
+
+```
+__rc0 = 0x80;                    /* base of the imaginary regs area */
+INCLUDE imag-regs.ld             /* defines __rc1..__rc31 relative to __rc0 */
+ASSERT(__rc31 == 0x9f, "Inconsistent zero page map.")
+zp : ORIGIN = __rc31 + 1, LENGTH = 0x100 - (__rc31 + 1)
+```
+
+Decoded: the 32 bytes starting at `0x80` in ZP are reserved for imaginary regs. After that
+(`__rc31 + 1 = 0xa0`), the remaining ZP (`0xa0..0xff`) is available to user programs. On the
+NES the base is `0x80` because `0x00..0x1f` are memory-mapped hardware registers and
+`0x20..0x7f` are typically used by game systems for high-performance variables.
+
+On the **Commander X16** there is an additional wrinkle: `__rc2` and `__rc3` are **aliased**
+to `__r0` of the KERNAL (the X16's operating system has its own convention that uses
+`__r0..__r15` as argument registers for API calls). Two calling conventions coexisting in the
+same zero-page map. This is possible because the X16 SDK's linker script knows about both and
+resolves the addresses so they coincide. If you forget to use that specific linker script,
+the `__rc2` of one function will collide with the `__r0` of another at runtime. Yet another
+silent bug.
+
+---
+
+## A real example: NES hello3
+
+The `zig-mos-examples` repository has adaptations of the **nesdoug** tutorials (Doug Fraker,
+author of "Making Games for the NES") for Zig. `hello3` is the canonical "Hello World" with
+a VRAM buffer — the example every NES developer writes in the first few days of learning.
+
+```zig
+// hello3.zig
+const neslib = @import("neslib");
+const nesdoug = @import("nesdoug");
+
+pub export fn main() callconv(.c) void {
+    const palette: [15]u8 = .{ 0x0f, 0x00, 0x10, 0x30 } ++ [1]u8{0} ** 11;
+    const text = &[12]u8{ 'H','E','L','L','O',' ','W','O','R','L','D','!' };
+
+    neslib.ppu_on_all();
+    neslib.pal_bg(&palette);
+    neslib.ppu_wait_nmi();
+    nesdoug.set_vram_buffer();
+    nesdoug.multi_vram_buffer_horz(text, text.len, neslib.NTADR_A(10, 7));
+    neslib.ppu_wait_nmi();
+    while (true) {}
+}
+```
+
+This looks like straightforward Zig code, but there are two things happening behind the
+scenes that are fundamental to this ecosystem working at all.
+
+First: the bindings for `neslib` and `nesdoug` were not written by hand. They come from
+Zig's `translate-c` pointed at the original SDK C headers (`neslib.h`, `nesdoug.h`). Run it
+once, take the generated `.zig`, wrap it as a module, and import it normally. This is the
+most important thing about Zig in this context: **you inherit every C library that has existed
+for years, for free**. `neslib` and `nesdoug` are C code written by Shiru and Doug Fraker over
+15+ years of practical NES experience. I don't want to rewrite that in Zig. I want to use it.
+`translate-c` gives me that.
+
+It's worth seeing how `translate-c` handles the predefined macros when the target is
+`mos-freestanding-none -mcpu=mos6502`. The output from Zig's Aro preprocessor correctly
+produces:
+
+```zig
+pub const __mos__ = @as(c_int, 1);
+pub const __MOS__ = @as(c_int, 1);
+pub const __ELF__ = @as(c_int, 1);
+pub const __SOFTFP__ = @as(c_int, 1);
+pub const __mos6502__ = @as(c_int, 1);
+```
+
+This means `#ifdef __mos6502__` in your C headers works correctly through `@cImport`.
+`__SOFTFP__` is correct because the 6502 obviously has no FPU. `__ELF__` because the
+output is ELF that the llvm-mos linker consumes.
+
+**But pay attention to what translate-c does not preserve.** Address-space attributes
+(`__attribute__((__address_space__(1)))`) — the mechanism llvm-mos uses to mark that a
+variable lives in zero page — **are not translated**. If your C header has
+`extern uint8_t ZP_VAR __attribute__((__address_space__(1)))`, `translate-c` will give
+you `pub extern const ZP_VAR: u8` with no ZP annotation. This produces correct code on
+average because the linker script still resolves the symbol to the right address, but you
+lose the `addrspace(.zp)` type annotation that could guide ZP optimization. For Zig
+code you write yourself, `addrspace(.zp)` now works natively end-to-end — the gap is
+specifically in headers generated by `translate-c` from C SDKs.
+
+Second: `callconv(.c)` and `pub export fn main`. The `main` here is not Zig's standard
+`main` with `!void` — it is a plain C function that the llvm-mos-sdk's `crt0` calls after
+initializing the hardware and ZP. If you forget to mark it as `export` or get the
+`callconv` wrong, the linker complains that `_main` doesn't exist and you spend 20 minutes
+figuring out why.
+
+The `build.zig` follows the Zig 0.17 pattern:
+
+```zig
+// build.zig — Zig 0.17 pattern
+const exe = b.addExecutable(.{
+    .name = "hello3",
+    .root_module = b.createModule(.{
+        .root_source_file = b.path("hello3.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    }),
+});
+exe.root_module.addImport("neslib", neslib_mod);
+
+// .incbin needs an absolute path
+const chr_wf = b.addWriteFiles();
+const chr_asm = chr_wf.add("chr-rom-abs.s", b.fmt(
+    \\.section .chr_rom,"a",@progbits
+    \\.incbin "{s}/Alpha.chr"
+, .{b.build_root.path orelse "."}));
+exe.root_module.addAssemblyFile(chr_asm);
+```
+
+Two things here need explanation because **nobody tells you this in the documentation**.
+
+**`bundle_compiler_rt = false` used to be mandatory** — you will still find it in older
+examples. Zig's `compiler_rt` is the runtime library that implements operations the hardware
+doesn't have natively — 64-bit division, wide integer multiplication, softfloat, etc. The
+root cause of the incompatibility was a single line in `compiler_rt/udivmodei4.zig`:
+`std.math.divCeil(usize, 65535, 32)`. With `usize = u16` on a 6502 target, that expression
+computes `65535 + 32 - 1 = 65566`, which overflows u16 at comptime. The fix was a one-liner:
+use `comptime_int` instead of `usize` as the type argument. **That patch is in this fork**, so you no longer need `bundle_compiler_rt = false` in new projects. Upstream
+Zig still carries the original code — this is fork-local until someone upstreams it.
+
+**The `.incbin` absolute-path trick is a necessary workaround.** `.incbin` is a GNU assembler
+directive (reused by ld.lld) that includes a raw binary file in the output. On the NES
+you use this to embed CHR-ROM data (graphics) in the final `.nes`. The problem: `.incbin
+"Alpha.chr"` resolves the path **relative to the current working directory at assembly
+time**. During `zig build`, the CWD is `.zig-cache`, not your project directory. So
+`"Alpha.chr"` doesn't exist there. The fix is to dynamically generate a `.s` with the
+absolute path already interpolated via `b.fmt`, and pass it to `addAssemblyFile`. This cost
+half an afternoon to discover. The ld.lld error message is just "file not found" with
+no indication of which path it tried.
+
+For debugging in Mesen (the de facto standard NES emulator), there is `elf2mlb`: an
+SDK tool that converts the ELF symbol table from the linker output into the MLB (Mesen Label
+File) format that Mesen's debugger understands. After running it, you can set breakpoints by
+original Zig function name (e.g., `hello3.main`) in Mesen's debugger, step through Zig lines,
+and inspect variables. It's not a VSCode-plus-gdb experience, but it is surprisingly usable.
+
+![zig-logo NES example running in Mesen2](https://raw.githubusercontent.com/kassane/zig-mos-examples/main/.github/zig-logo.gif)
+
+---
+
+## Build-system surprises (the rant section)
+
+Let's be honest: every cross toolchain has its rough edges. Some are documented, most are not.
+Here are the five that cost me the most real time over the past several months, with a concrete
+fix for each.
+
+### 1. `arm_neon.h` with `mfloat8` breaks the LLVM build
+
+Zig 0.17 includes C headers from its own toolchain that expose ARM NEON intrinsics —
+including the new `mfloat8_t` (an 8-bit floating-point type added in ARMv8.9-A). This
+shouldn't affect a 6502 build at all. Except that the LLVM build itself (when you are
+bootstrapping zig-mos) compiles zstd via `zig cc`, and zstd has conditional NEON
+fallback paths. The Zig clang pulls in `arm_neon.h`, finds `mfloat8_t`, and the llvm-mos
+Sema chokes on those definitions.
+
+The symptom is a compilation error in the middle of the `zstd::build-lib` phase, with a
+message about unknown builtin types. The fix is **not** obvious. You need to pass **three**
+cmake flags to LLVM, **and** pass an extra definition in the zstd `build-lib` invocation:
+
+```sh
+# During LLVM cmake:
+-DZSTD_NO_INTRINSICS=1
+-DBLAKE3_USE_NEON=0
+-DLLVM_XXH_USE_NEON=0
+
+# And in the zstd build-lib invocation inside the bootstrap:
+zig build-lib ... -DZSTD_NO_INTRINSICS
+```
+
+`BLAKE3_USE_NEON` and `LLVM_XXH_USE_NEON` belong to BLAKE3 and xxHash respectively,
+which LLVM uses for internal hash operations. All three together disable every code path
+that touches NEON intrinsics. None of these flags are documented in the llvm-mos README.
+They were found empirically.
+
+### 2. `prctl_mm_map` escapes `-DLLVM_BUILD_TOOLS=OFF`
+
+The second bootstrap problem, also specific to LLVM. LLVM ships dozens of CLI tools
+(`llc`, `opt`, `llvm-mc`, `llvm-objdump`, etc). The `-DLLVM_BUILD_TOOLS=OFF` flag
+promises to disable compilation of all of them. In practice it disables **almost** all
+of them. `llvm-exegesis` — a microbenchmarking tool — slips through the flag.
+
+This is a known bug in LLVM's cmake that has never been fixed (there has been an open
+issue for 3+ years). On Linux, `llvm-exegesis` uses `prctl_mm_map`, a kernel feature
+that some older distributions or lean containers don't expose. If your build host doesn't
+have that symbol in libc, the bootstrap dies at that point, and you'll be confused because
+you theoretically asked not to compile tools.
+
+The fix is to disable exegesis **specifically** with its granular flag:
+
+```sh
+-DLLVM_TOOL_LLVM_EXEGESIS_BUILD=OFF
+```
+
+This flag does not appear in `cmake -LH` unless you already know its name. Finding it was
+a matter of grepping LLVM's CMakeLists.txt for "exegesis".
+
+### 3. NES W65C02 opcodes sneak into "plain" NES builds
+
+This is the **most cruel** gotcha on the list because it compiles cleanly, links cleanly,
+produces a valid `.nes`, and **fails at runtime** on real hardware or cycle-accurate
+emulators like Mesen. The symptoms are subtle: parts of the code "just don't work", the
+program counter jumps to strange addresses, sometimes it runs in FCEUX (a more permissive
+emulator) and breaks in Mesen.
+
+The cause: the original zig-mos fork had the block that detects `os_tag=.nes` forcing
+`-mcpu=mosw65c02` as a "reasonable default" (after all, the NES runs a 6502, right?).
+Wrong. **The Ricoh 2A03 is a plain NMOS 6502**. It is **not** a W65C02. The differences
+between the NMOS 6502 and the CMOS W65C02 include new instructions like `PHX` (push X),
+`PHY` (push Y), `STZ` (store zero), `BRA` (branch always), and additional indirect-indexed
+variants.
+
+The Ricoh 2A03 treats these new instructions as undocumented NOPs — it doesn't crash, but
+it does nothing. So your code compiles, runs, and silently doesn't push X when you issued
+`PHX`, silently doesn't zero memory when you issued `STZ`. Debugging this is torture.
+
+This default has been corrected in the fork: `os_tag = .nes` now maps to `mos6502` (NMOS).
+Even so, the examples use an explicit target for clarity — being explicit about the CPU model
+protects against any future regression:
+
+```zig
+const target = b.resolveTargetQuery(.{
+    .cpu_arch = .mos,
+    .os_tag = .freestanding,
+    .abi = .none,
+    .cpu_model = .{ .explicit = &std.Target.mos.cpu.mos6502 },
+});
+```
+
+### 4. LTO has to be split per-object
+
+The original `neslib.c` uses a technique common in 6502 development: GCC section attributes
+(`__attribute__((section(".zeropage")))`) to reserve specific slots in zero page. For these
+attributes to be processed correctly by the linker when allocating ZP, **LTO must be on** —
+because section information lives in intermediate bitcode, not in the final object file.
+
+At the same time, the SDK's `crt0` has entry-point symbols (reset vector, NMI vector, IRQ
+vector) that must be at absolutely fixed positions in the binary, and LTO can reorder or
+eliminate those symbols if enabled. So **crt0 needs LTO off**.
+
+If you enable LTO globally with `-flto=full`, one of the two things breaks. If you disable
+it globally, the other breaks.
+
+The fix: **per-module LTO**. In `build.zig`, you set `lto_mode = .full` (or equivalent)
+for the specific modules that use section attributes, and leave LTO off for the crt0 module.
+This means a single project has two different LTO modes active simultaneously, something Zig
+supports but that is a footgun in C-land. Ugly, but it's what works.
+
+### 5. Bitcode mismatch between LLVM 21 (zig-mos) and LLVM 23 (SDK)
+
+This is the most insidious item on the list and the one that cost me a literal afternoon to
+diagnose. Remember how I said there are two clangs on the machine, two LLVM releases apart?
+That has a concrete consequence when you try to be clever and link the precompiled `.a`
+archives from llvm-mos-sdk directly against code compiled by zig-mos.
+
+The setup is tempting: the SDK already ships `libneslib.a`, `libc64.a`, etc., precompiled.
+Why recompile? Just link and done. I tried this. The result:
+
+```sh
+$ file lto_clang23.o
+lto_clang23.o: LLVM IR bitcode
+
+$ zig cc ... lto_clang23.o ...
+ld.lld: error: undefined symbol: __rc2
+>>> referenced by lto_mixed.lto.o:(add)
+```
+
+What happened: the SDK was built with `-flto=thin` using the llvm-mos-sdk's own clang 23.
+The SDK's `.a` files contain **LLVM 23 IR bitcode**, not native object files. When zig-mos's
+linker (which is `lld` from LLVM 21) tries to consume that bitcode, it reads the format but
+**does not understand all the IR opcodes that LLVM 23 introduced**. Symbols like `__rc2`
+appear as undefined because the linker cannot process the function that references them.
+
+LLVM bitcode format **changes between major versions**. This is documented in fine print in
+the `LLVM Developer Policy`, but nobody reads that before trying to link. The error message
+is "undefined symbol", which sends you looking in `neslib.c` for a missing definition. It
+never occurs to you that the problem is bitcode format incompatibility between LLVM major
+releases.
+
+The fix is to **compile the entire SDK from source** using the same toolchain you use to
+compile your Zig code. The `zig-mos-examples` repository handles this with a dedicated
+[`sdk/build.zig`](https://github.com/kassane/zig-mos-examples/blob/main/sdk/build.zig)
+— a Zig script that recompiles all platform libs, linker scripts, and crt0s from the
+llvm-mos-sdk using the zig-mos `zig cc` (LLVM 21). Only after that rebuild finishes does
+the application build begin, linking against the freshly produced LLVM 21 archives. The
+root cause is exactly the version conflict: the default SDK ships bitcode from clang 23;
+zig-mos's lld is LLVM 21. `sdk/build.zig` is the structural answer to that conflict. It
+takes longer in CI, but it eliminates this entire class of bug.
+
+This also has an important policy implication: **you cannot mix toolchains**. Either
+everything is llvm-mos-sdk (clang 23 + lld 23), or everything is zig-mos (zig cc with
+vendored llvm-mos 21). If you want Zig on the frontend, accept that you will run
+`sdk/build.zig` every time you update zig-mos. That's the cost.
+
+---
+
+## What's still missing on the Zig side
+
+To be honest with you: the zig-mos fork **is still experimental**. But I want to be precise
+about what exactly is missing, because I have seen imprecise summaries of the Zig-side gaps
+circulating online, and imprecision helps no one.
+
+**What is already correctly implemented** (as of the `zig mos6502 initial` commit in the
+fork):
+
+- `.mos` is in the **correct little-endian block** inside `Target.zig`. The 6502 is natively
+  little-endian and the type system knows it.
+- `.mos` is in the **correct 16-bit pointer-width block**, alongside `.avr` and `.msp430`.
+  `usize` is 16 bits as it should be.
+- `mos_sysv` and `mos_interrupt` are defined as `CallingConvention` variants in `builtin.zig`.
+  You can write NMI/IRQ handlers directly in Zig with the correct `rti` epilogue.
+- `.mos => "mos"` is present in the lookup table in `codegen/llvm.zig`. Codegen produces the
+  correct triple.
+- Aro correctly emits `__mos__`, `__MOS__`, `__ELF__`, `__SOFTFP__`, and per-CPU feature
+  macros like `__mos6502__`. The `#ifdef` guards in C headers work.
+- `LLVMInitializeMOSDisassembler` is called in Zig's LLVM initialization block. Disassembly
+  of MOS objects via Zig's embedded `llvm-objdump` path works correctly.
+- `R_MOS` (18 relocation types per ELF spec v0.3.1) and `SHF_MOS_ZEROPAGE` are defined in
+  `std.elf`. MOS targets have the correct `page_size = 256` in `std.heap`.
+- `ptrAbiAlignment` returns `.@"1"` for MOS. Datalayout `p:16:8` means 16-bit pointers with
+  8-bit ABI alignment — the type system correctly reflects that the 6502 has no pointer
+  alignment requirements.
+- `callconvSupported` in the stage2_c backend includes `mos_interrupt` and `mos_sysv`.
+- Inline asm clobbers fully wired: registers `a`, `x`, `y`, `c`, `v`, `p`, and the synthetic
+  `memory` clobber are all expressible in `asm volatile` blocks.
+- `addrspace(.zp)` is wired end-to-end: `AddressSpace.zp` in `builtin.zig`,
+  `supportsAddressSpace` in `Target.zig`, LLVM address-space mapping in `codegen/llvm.zig`,
+  `@addrSpaceCast` between `.zp` and generic, and ZP pointer `abiSize`/`bitSize` correctly
+  returns 8 bits via `addrSpacePtrBitWidth`.
+
+The real remaining gaps are narrower than the architecture — they fall more into the
+"documented workaround required" category than "fundamentally broken":
+
+1. **`compiler_rt` is incompatible with 16-bit `usize`.** This is the `bundle_compiler_rt =
+   false` requirement from the build.zig section above. The specific root cause is in
+   `compiler_rt/udivmodei4.zig`, where an internal buffer-size calculation uses `usize` as
+   the type argument to `divCeil` — and with `usize = u16`, that overflows at comptime.
+   Fixing it without regressing every other architecture in Zig's test suite takes time nobody
+   has prioritized yet. Until someone does that, every zig-mos project must disable the bundle
+   and use the SDK's hand-tuned runtime routines.
+
+2. **DWARF/CFI stack unwinding is not emitted.** llvm-mos currently generates zero CFI
+   directives — `.debug_frame` in the output ELF is empty. Symbol-level debugging in Mesen
+   via `elf2mlb` still works (it uses `.debug_info` and `.symtab`, which are present).
+   But `std.debug.printStackTrace` and any tool that walks the call stack through
+   `.debug_frame` will produce nothing on MOS targets. The DWARF register number
+   specification for MOS (PR [#519](https://github.com/llvm-mos/llvm-mos/pull/519) on llvm-mos, finalized as spec v0.1.1) is fully designed
+   but unmerged; until that lands and CFI emission is wired into the backend, stack
+   unwinding remains unavailable.
+
+3. **`translate-c` drops ZP address-space attributes.** Already covered in the NES example
+   section, but worth repeating here: `__attribute__((__address_space__(1)))` annotations are
+   silently dropped by Aro when translating C headers. The linker script still resolves the
+   symbol to the correct ZP address, but the translated binding has no addrspace annotation.
+   For Zig code you write yourself, `addrspace(.zp)` now works natively end-to-end — the gap
+   is specifically in headers generated by `translate-c` from existing C SDKs.
+
+None of these are blockers for the current examples. They are edges that surface when you
+stray off the beaten path, that cost explanations when someone opens a confused issue, and
+that will require well-structured PRs when I or someone else has the bandwidth.
+
+---
+
+## mos-sim — a cycle-count sanity check
+
+The SDK ships `mos-sim`, a simple deterministic 6502 simulator. It serves to verify that
+the generated code isn't doing anything wildly wrong in terms of cycles. Running the
+standard benchmarks:
+
+```
+mos-sim benchmarks
+==================
+fib(10) =     55  ( 439 cycles)
+fib(20) =   6765  ( 857 cycles)
+sieve<127>: 31 primes  (6552 cycles)
+```
+
+These numbers are not a performance benchmark against another toolchain — they are a
+sanity check. If your code starts consuming 100× more cycles than the reference on the
+same task, something is wrong in code generation. Typically: a function being inlined
+that should have been called, or an imaginary register spilling because it doesn't fit
+in the allocated zero-page budget.
+
+For scale: 857 cycles for `fib(20)` against ~600–700 cycles of hand-written 6502 assembly
+(depending on how aggressively you inline the base cases), and against ~3,000–5,000 cycles
+from cc65 with `-Oirs` on the same program. That 4–6× gap between llvm-mos and cc65 is the
+custom register allocator and LTO doing real work on a 3-register CPU. It is a genuinely
+impressive result.
+
+The same simulator doubles as a functional correctness harness. The `addrspace-test`
+example from `zig-mos-examples` exercises the full `addrspace(.zp)` feature set — ZP
+pointer size, `ptrABIAlign`, variable read/write, and `@addrSpaceCast` in both directions:
+
+```sh
+zig build run-sim-addrspace-test
+```
+
+```
+addrSpace + ptrABIAlign tests
+=============================
+  [OK]   ptrABIAlign: @alignOf(*u8) == 1
+  [OK]   ZP ptr size: @sizeOf(*addrspace(.zp) u8) == 1
+  [OK]   ZP u8 write/read
+  [OK]   ZP u16 write/read
+  [OK]   @addrSpaceCast zp→generic write
+  [OK]   @addrSpaceCast generic→zp write
+-----------------------------
+pass: 6  fail: 0
+```
+
+---
+
+## Platform coverage
+
+The `zig-mos-examples` repository has **57 examples across 16 hardware platforms**:
+
+- **NES** (26 examples): NROM ×3, zig-logo, fade, sprites, pads, color-cycle, fullbg,
+  random, bat-ball, megablast, gg-demo; CNROM ×2, UNROM ×2, MMC1 ×2, MMC3 ×2, GTROM ×2,
+  UNROM-512, Action 53
+- **FDS** — Famicom Disk System backdrop hello
+- **SNES** (7 examples): LoROM hello, color-cycle, zig-logo, π-test, FastROM π, HiROM hello,
+  joypad
+- **Commodore 64** (3 examples): hello, Fibonacci, plasma effect
+- **Commodore 128**
+- **Commodore PET**
+- **Commodore VIC-20**
+- **GEOS-CBM** — GEOS kernel app (`.cvt`)
+- **Commander X16** (2 examples)
+- **Atari Lynx**
+- **Atari 2600** (2 examples): 4K colour bars, 3E mapper colour bars
+- **Atari 8-bit / 5200** (5 examples): DOS, cartridge, MegaCart, XEGS, Atari 5200 cart
+- **PC Engine** / TurboGrafx-16 (2 examples)
+- **Neo6502**
+- **Watara Supervision**
+- **Dodo**
+- **6502 simulator** (`mos-sim`): benchmarks hello + `addrspace(.zp)` correctness test
+
+Optional platform extensions (require fetching an external dependency):
+
+- **Ben Eater 6502** (2 examples): LCD hello, asm-clobber register test
+- **MEGA65** (3 examples): hello, plasma, VICIV
+- **Apple IIe** (1 example): ProDOS hello
+
+The `sdk/build.zig` infrastructure covers all llvm-mos-sdk platform targets, including
+platforms not yet demonstrated in the examples repo.
+
+Not everything is equally polished. MEGA65 and C64 are the most tested because I use them
+personally. NES has the deepest coverage thanks to the nesdoug tutorial ports. Lynx and
+PC Engine are skeletal — they compile and run the trivial example but don't exercise the
+hardware deeply. The Atari 2600 example makes the screen flash; it is not Adventure.
+
+CI runs on **4 hosts** (Linux x86_64, Linux aarch64, macOS arm64, Windows x86_64) against
+all 57 examples. That is 228 builds per push. It takes 25–40 minutes on a reasonable machine,
+and it is why I rarely commit trivial changes — the CI feedback loop is long. If you plan to
+contribute, be prepared for that.
+
+---
+
+## When to reach for which toolchain
+
+Here's the honest part. Three roughly viable options all sitting on the same llvm-mos backend —
+let me tell you when to choose each one, without trying to sell one over the others. First, the
+summary matrix:
+
+| Toolchain | Language | C standard | LTO | Status |
+|---|---|---|---|---|
+| cc65 | C | C89 | No | Mature, production |
+| llvm-mos + C | C/C++ | C17+ | Yes | Active, used commercially |
+| rust-mos | Rust | N/A | Yes | Experimental |
+| zig-mos | Zig | N/A | Yes | Hobby-scale fork |
+
+
+**cc65** is the safe, proven choice. Two decades of history, abundant documentation, the entire
+NES/C64 homebrew community knows how to use it. If you want to write an NES game and release it
+at the next NESDev Compo, use cc65. If you are running a workshop at a retro event and need
+everything to work on the first try, use cc65. The generated code is not optimal by modern
+standards (cc65's regalloc is primitive), but it is predictable, stable, and supportable.
+Nothing in this article diminishes cc65 — it remains the default choice for good reasons.
+
+**llvm-mos + C** is where you go if you want modern C (C17 or C23), genuine aggressive
+optimizations, and you are willing to deal with the fact that the toolchain is not in your
+Linux distribution and you will install it manually from a tarball. llvm-mos's custom regalloc
+generates **noticeably better** code than cc65 on hot loops — I measured this in my own
+benchmarks, it's not marketing. The SDK has broad platform coverage. If you want performance
+without leaving C, this is your choice. The cost is the separate SDK tarball and managing two
+clangs on your machine.
+
+**zig-mos** makes sense if you **already write Zig** for the rest of your stack and want to
+share `build.zig`, `build.zig.zon`, CI infrastructure, and code style with retro targets. The
+concrete benefits:
+
+- `translate-c` instead of hand-writing bindings for every new C header from the SDK.
+- Zig's structured error handling (`!void`, `try`) and comptime working with the caveats of
+  `usize = u16`.
+- A single build system for your monorepo (if you have mixed desktop/embedded projects).
+- `defer` and `errdefer` in the middle of 6502 code — that's genuinely new.
+
+The costs:
+
+- An experimental fork that you will probably have to build locally.
+- The `std` gaps listed above that will bite you eventually.
+- You will likely have to debug some edge case that has never been tested because nobody else
+  has used exactly the feature you just tried.
+- Small community. If you open an issue, I respond. If I'm traveling, expect a week's wait.
+
+This is not production. It is serious hobby work. If you accept that, welcome. If you need an
+SLA, go back to cc65.
+
+---
+
+## Closing thoughts
+
+This post is longer than most because the 6502 toolchain space is dense and because the rough
+edges need to be documented somewhere. The next person trying to bootstrap zig-mos shouldn't
+lose the same four afternoons I lost to the arm_neon gotcha, the exegesis issue, the W65C02
+default, and the per-module LTO split.
+
+If you decide to try it: start with `zig-mos-examples`, run the NES `hello3`, verify that the
+`.nes` output works in Mesen. Then try the other platform examples. Only after that should you
+start a fresh project from scratch. That order saves time.
+
+And if you hit a bug that isn't listed here, open an issue. This ecosystem exists because people
+show up, report things precisely, and occasionally send a PR. It's a hobby project, but it's a
+serious one.
+
+**License and contributing.** zig-mos-bootstrap is MIT-licensed — the same license as upstream
+Zig. To contribute: build from source first (`./build x86_64-linux-musl baseline` or your host
+triple), run the `zig-mos-examples` suite to establish a baseline, then open a PR against the
+relevant repo. Zig-side fixes (std, codegen, Sema) go to the zig-mos fork; platform library or
+linker script fixes go to llvm-mos-sdk upstream. For bugs you can't reproduce locally, the CI
+matrix (4 hosts × 57 examples) is the ground truth — reference the failing job in your report.
+
+---
+
+## Links
+
+- [zig-mos-bootstrap](https://github.com/kassane/zig-mos-bootstrap) — the fork and bootstrap scripts
+- [zig-mos-examples](https://github.com/kassane/zig-mos-examples) — 57 examples across 16 platforms; sdk/build.zig covers all SDK targets
+- [llvm-mos](https://github.com/llvm-mos/llvm-mos) — the backend doing the heavy lifting
+- [llvm-mos-sdk](https://github.com/llvm-mos/llvm-mos-sdk) — platform libs and linker scripts
+- [rust-mos](https://github.com/mrk-its/rust-mos) — the Rust alternative
+- [mos-hardware](https://github.com/mlund/mos-hardware) — typed MMIO for C64/MEGA65/X16
+- [mega65-libc](https://github.com/MEGA65/mega65-libc) — the official MEGA65 org libc
+- [mega65-examples](https://github.com/MEGA65/mega65-examples) — official MEGA65 examples
